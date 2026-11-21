@@ -347,7 +347,31 @@ select.input { appearance: none; padding-right: 32px;
   padding: 10px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow);
 }
 
+/* ---------- Annonce PDF ---------- */
+.btn-share { justify-self: start; margin-top: 6px; }
+@media (max-width: 520px) { .btn-share { justify-self: stretch; } }
+.pdf-dialog { display: grid; gap: 6px; }
+.check-row {
+  display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 0 4px;
+  border-bottom: 1px solid var(--border); cursor: pointer; font-weight: 550;
+}
+.check-row input { width: 20px; height: 20px; accent-color: var(--primary); flex: none; }
+.pdf-note { margin: 8px 0 10px; }
+.pdf-status { text-align: center; margin: 6px 0 12px; color: var(--muted); }
+.spinner {
+  width: 36px; height: 36px; margin: 16px auto 4px; border-radius: 50%;
+  border: 4px solid var(--surface-2); border-top-color: var(--primary);
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.pdf-ready { display: flex; align-items: center; gap: 12px; padding: 8px 4px 12px; }
+.pdf-ready .icon-xl { color: var(--primary); }
+.pdf-name { font-weight: 650; overflow-wrap: anywhere; }
+.pdf-actions { display: grid; gap: 8px; }
+.pdf-close { margin-top: 8px; border: 0; }
+
 /* ---------- Réglages ---------- */
+.settings .form-grid { margin-top: 4px; }
 .settings p { margin: 0 0 12px; }
 
 /* ---------- Modales ---------- */

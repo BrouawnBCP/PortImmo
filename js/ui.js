@@ -57,6 +57,9 @@ const ICONS = {
   check: '<path d="M20 6 9 17l-5-5"/>',
   rename: '<path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/>',
   up: '<path d="m18 15-6-6-6 6"/>',
+  share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98"/><path d="m15.41 6.51-6.82 3.98"/>',
+  file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  eye: '<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>',
   down: '<path d="m6 9 6 6 6-6"/>',
 };
 
@@ -103,7 +106,7 @@ export function toast(msg, ms = 2600) {
 }
 
 // ---------- Modales ----------
-function openOverlay(content, { onClose, kind = 'sheet' } = {}) {
+export function openOverlay(content, { onClose, kind = 'sheet' } = {}) {
   const overlay = h('div', { class: `overlay overlay-${kind}` });
   const panel = h('div', { class: `panel panel-${kind}`, role: 'dialog', 'aria-modal': 'true' }, content);
   overlay.append(panel);

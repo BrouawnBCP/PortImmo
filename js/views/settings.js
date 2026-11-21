@@ -1,5 +1,13 @@
 import { h, icon, toast, confirmDialog } from '../ui.js';
-import { exportAll, importAll, listBiens } from '../db.js';
+import { exportAll, importAll, listBiens, getMeta, setMeta } from '../db.js';
+
+const AGENCE_FIELDS = [
+  { key: 'nom', label: "Nom de l'agence", placeholder: 'Ex : Agence du Cannet' },
+  { key: 'conseiller', label: 'Conseiller', placeholder: 'Ex : Jean Dupont' },
+  { key: 'telephone', label: 'Téléphone', type: 'tel' },
+  { key: 'email', label: 'E-mail', type: 'email' },
+  { key: 'site', label: 'Site web', placeholder: 'Ex : www.mon-agence.fr' },
+];
 import { setTopbar, installPrompt } from '../app.js';
 import { loadDemo } from '../demo.js';
 
@@ -8,6 +16,19 @@ const fmtSize = (b) => (b > 1e9 ? (b / 1e9).toFixed(1) + ' Go' : (b / 1e6).toFix
 export async function renderSettings(view) {
   setTopbar({ title: 'Réglages' });
   const biens = await listBiens();
+  const agence = (await getMeta('agence')) || {};
+
+  const agenceForm = h('form', { class: 'form-grid', onsubmit: async (e) => {
+    e.preventDefault();
+    const value = {};
+    AGENCE_FIELDS.forEach((f) => { value[f.key] = agenceForm.elements[f.key].value.trim(); });
+    await setMeta('agence', value);
+    toast('Coordonnées enregistrées');
+  } },
+  AGENCE_FIELDS.map((f) => h('div', { class: 'field' + (f.key === 'nom' ? ' full' : '') },
+    h('label', { for: 'ag-' + f.key }, f.label),
+    h('input', { class: 'input', id: 'ag-' + f.key, name: f.key, type: f.type || 'text', placeholder: f.placeholder || '', value: agence[f.key] || '' }))),
+  h('div', { class: 'field full' }, h('button', { class: 'btn btn-primary', type: 'submit' }, icon('check'), 'Enregistrer')));
 
   const storage = h('p', { class: 'muted' }, 'Calcul en cours…');
   if (navigator.storage && navigator.storage.estimate) {
@@ -38,6 +59,10 @@ export async function renderSettings(view) {
   const fileInput = h('input', { type: 'file', accept: '.json,application/json', style: { display: 'none' }, onchange: onImport });
 
   view.append(h('div', { class: 'settings' },
+    h('section', { class: 'section' },
+      h('div', { class: 'section-head' }, h('h3', null, 'Agence (affichée sur les PDF)')),
+      h('p', { class: 'small muted' }, 'Ces coordonnées apparaissent en en-tête, en pied de page et dans l’encadré « Votre contact » des annonces PDF.'),
+      agenceForm),
     h('section', { class: 'section' },
       h('div', { class: 'section-head' }, h('h3', null, 'Installation')),
       installCard),

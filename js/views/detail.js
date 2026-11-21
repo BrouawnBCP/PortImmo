@@ -6,22 +6,8 @@ import { setTopbar, isCurrent } from '../app.js';
 import { statutInfo } from './list.js';
 import { openLightbox } from './lightbox.js';
 
-const optLabel = (f, v) => {
-  if (f.type !== 'select') return v;
-  const o = f.options.find((x) => (typeof x === 'object' ? x.value : x) === v);
-  return o ? (typeof o === 'object' ? o.label : o) : v;
-};
-
-function formatValue(f, v) {
-  if (f.type === 'number') {
-    if (f.unit === '€' || (f.unit || '').startsWith('€')) return fmtPrice(v) + (f.unit && f.unit !== '€' ? f.unit.slice(1) : '');
-    return fmtNum(v) + (f.unit ? ' ' + f.unit : '');
-  }
-  if (f.type === 'date') return fmtDate(v);
-  return optLabel(f, v);
-}
-
-const isEmpty = (v) => v == null || v === '' || (Array.isArray(v) && !v.length);
+import { formatValue, isEmpty } from '../format.js';
+import { openPdfDialog } from './share.js';
 
 /** Nom unique : « Chambre » -> « Chambre 2 » si besoin. */
 function uniqueName(name, pieces) {
@@ -42,6 +28,7 @@ export async function renderDetail(view, id, token) {
     title: bien.titre || 'Bien',
     back: '#/',
     actions: [
+      { icon: 'share', label: 'Annonce PDF', onClick: () => openPdfDialog(bien) },
       { icon: 'edit', label: 'Modifier', onClick: () => { location.hash = `#/bien/${encodeURIComponent(id)}/modifier`; } },
       { icon: 'more', label: 'Plus d’actions', onClick: moreActions },
     ],
@@ -78,7 +65,9 @@ export async function renderDetail(view, id, token) {
         class: 'detail-place', target: '_blank', rel: 'noopener',
         href: 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(lieu),
       }, icon('pin'), lieu) : null,
-      facts.length ? h('div', { class: 'facts facts-lg' }, facts.map((f) => h('span', { class: 'fact' }, f))) : null);
+      facts.length ? h('div', { class: 'facts facts-lg' }, facts.map((f) => h('span', { class: 'fact' }, f))) : null,
+      h('button', { class: 'btn btn-primary btn-share', type: 'button', onclick: () => openPdfDialog(bien) },
+        icon('share'), 'Partager l’annonce en PDF'));
   }
 
   // ---------- Photo principale ----------
@@ -330,6 +319,7 @@ export async function renderDetail(view, id, token) {
   function moreActions() {
     actionSheet(bien.titre || 'Bien', [
       { icon: 'edit', label: 'Modifier les informations', onClick: () => { location.hash = `#/bien/${encodeURIComponent(id)}/modifier`; } },
+      { icon: 'share', label: 'Partager l’annonce en PDF', onClick: () => openPdfDialog(bien) },
       { icon: 'copy', label: 'Dupliquer (sans les photos)', onClick: duplicate },
       { icon: 'trash', label: 'Supprimer le bien', danger: true, onClick: remove },
     ]);

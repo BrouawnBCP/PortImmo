@@ -2,7 +2,7 @@
 // Les photos sont stockées en Blob (fichier compressé) + miniature.
 
 const DB_NAME = 'portimmo';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // v2 : ajout du magasin « meta » (réglages : coordonnées de l'agence…)
 
 let dbPromise;
 
@@ -18,6 +18,9 @@ function openDb() {
       if (!db.objectStoreNames.contains('photos')) {
         const s = db.createObjectStore('photos', { keyPath: 'id' });
         s.createIndex('bienId', 'bienId');
+      }
+      if (!db.objectStoreNames.contains('meta')) {
+        db.createObjectStore('meta', { keyPath: 'key' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -127,6 +130,17 @@ export function countPhotos(bienId) {
     reqP(t.objectStore('photos').index('bienId').count(bienId)));
 }
 
+// ---------- Réglages ----------
+
+export async function getMeta(key, fallback = null) {
+  const row = await run('meta', 'readonly', (t) => reqP(t.objectStore('meta').get(key)));
+  return row ? row.value : fallback;
+}
+
+export function setMeta(key, value) {
+  return run('meta', 'readwrite', (t) => { t.objectStore('meta').put({ key, value }); });
+}
+
 // ---------- Sauvegarde / restauration ----------
 
 function blobToDataUrl(blob) {
@@ -154,7 +168,8 @@ export async function exportAll() {
       thumb: p.thumb ? await blobToDataUrl(p.thumb) : null,
     });
   }
-  return { app: 'portimmo', format: 1, exportedAt: new Date().toISOString(), biens, photos };
+  const agence = await getMeta('agence');
+  return { app: 'portimmo', format: 1, exportedAt: new Date().toISOString(), agence, biens, photos };
 }
 
 export async function importAll(data) {
@@ -173,5 +188,6 @@ export async function importAll(data) {
     (data.biens || []).forEach((b) => sb.put(b));
     photos.forEach((p) => sp.put(p));
   });
+  if (data.agence && !(await getMeta('agence'))) await setMeta('agence', data.agence);
   return { biens: (data.biens || []).length, photos: photos.length };
 }
