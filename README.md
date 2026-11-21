@@ -3,25 +3,35 @@
 Application web installable (PWA) pour gérer un portefeuille de biens immobiliers
 depuis un téléphone ou un ordinateur.
 
-## Fonctionnalités actuelles
+## Fonctionnalités
 
-- **Mes Biens** : liste des biens avec photo principale, prix, statut, recherche, filtres et tri.
-- **Fiche bien** : catégories type annonce (général, prix, localisation, caractéristiques,
-  énergie/DPE, équipements, description, propriétaire & notes privées) + champs personnalisés.
-- **Photos par pièce / emplacement** : création de pièces (Façade, Séjour, Cuisine…),
-  photos depuis l'appareil photo ou la galerie, photo principale, déplacement entre pièces,
-  visionneuse plein écran (glisser pour changer de photo).
-- Photos compressées automatiquement (1920 px max) pour économiser la place.
-- Fonctionne hors-ligne, s'installe sur l'écran d'accueil.
-- Sauvegarde / restauration (fichier `.json`) dans Réglages.
+- **Accueil (tableau de bord)** : biens par statut, valeur du portefeuille, honoraires prévisionnels,
+  prochaines visites, visites à compléter, offres en attente, mandats à renouveler, activité récente,
+  rappel de sauvegarde.
+- **Mes Biens** : liste (recherche, filtres, tri) et **carte** (OpenStreetMap ; adresses localisées via
+  api-adresse.data.gouv.fr, une seule fois par adresse).
+- **Fiche bien** :
+  - informations type annonce + champs personnalisés, description générée automatiquement (à relire) ;
+  - **journal du bien** : visites (compte rendu, note, export calendrier), offres (accepter / refuser),
+    changements de prix et de statut (enregistrés automatiquement), notes, photos, documents ;
+  - **pièces & photos** : surface et remarques par pièce, total des surfaces, photos par pièce
+    (appareil photo / galerie), photo principale, ordre, rotation, recadrage ;
+  - **documents** (PDF ou images : diagnostics, DPE, métré…) ;
+  - **acquéreurs intéressés** (rapprochement automatique).
+- **Partage** : mini-fiche image pour les messageries, annonce complète PDF, fiche vitrine A4 paysage.
+- **Acquéreurs** : coordonnées, critères de recherche, biens correspondants avec score, visites & offres.
+- **Simulateur** : honoraires (taux par défaut, montant modifiable à la main), prix net vendeur,
+  frais de notaire, crédit (mensualité, assurance, revenus conseillés).
+- **Réglages** : agence + logo (PDF, mini-fiche), valeurs par défaut des simulations,
+  sauvegarde / restauration, installation.
 
-> Les données sont stockées **sur l'appareil** (IndexedDB). Elles ne sont pas encore
-> synchronisées entre le téléphone et l'ordinateur.
+> Les données sont stockées **sur l'appareil** (IndexedDB). Elles ne sont pas synchronisées entre
+> le téléphone et l'ordinateur : utiliser la sauvegarde / restauration pour les transférer.
 
 ## Modifier les catégories
 
 Tout est dans [`js/config.js`](js/config.js) : sections, champs, listes de choix,
-pièces proposées, qualité des photos. Le formulaire et la fiche se mettent à jour seuls.
+pièces proposées, qualité des photos. Le formulaire, la fiche et les PDF se mettent à jour seuls.
 
 ## Lancer en local
 
@@ -33,22 +43,25 @@ Puis ouvrir <http://localhost:5180>.
 
 ## Mise en ligne
 
-Aucune étape de compilation : il suffit d'héberger les fichiers tels quels sur un
-hébergement HTTPS statique (GitHub Pages, Netlify, Cloudflare Pages…).
+Publication automatique sur GitHub Pages à chaque « Push » (workflow `.github/workflows/deploy.yml`).
 Penser à incrémenter `VERSION` dans `sw.js` à chaque mise en ligne.
+Le dossier `donnees-privees/` (données réelles) n'est jamais publié.
 
 ## Structure
 
 ```
-index.html            page unique
-manifest.webmanifest  infos d'installation (nom, icônes, couleurs)
-sw.js                 service worker (hors-ligne)
-css/styles.css        styles (mobile d'abord, thème clair/sombre)
-js/config.js          catégories et champs  <- à personnaliser
-js/db.js              stockage local (biens + photos)
-js/images.js          compression des photos
-js/ui.js              utilitaires d'interface (icônes, modales…)
-js/app.js             routeur + barre du haut
-js/views/*.js         écrans (liste, fiche, formulaire, visionneuse, réglages)
-icons/                icônes de l'application
+index.html              page unique
+sw.js                   service worker (hors-ligne)
+css/styles.css          styles (mobile d'abord, thème clair/sombre)
+js/config.js            catégories et champs  <- à personnaliser
+js/db.js                stockage local (biens, photos, journal, documents, acquéreurs, réglages)
+js/app.js               routeur + barre du haut
+js/ui.js, dialogs.js    utilitaires d'interface et fenêtres de saisie
+js/images.js            compression, rotation, recadrage des photos
+js/describe.js          description automatique
+js/matching.js          rapprochement biens <-> acquéreurs
+js/minifiche.js         image de partage
+js/pdf/                 générateur PDF (annonce, fiche vitrine)
+js/views/               écrans
+demo/exemple.json       annonce d'exemple (anonymisée)
 ```

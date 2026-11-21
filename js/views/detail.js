@@ -1,13 +1,17 @@
-import { h, icon, blobUrl, fmtPrice, fmtNum, fmtDate, toast, actionSheet, confirmDialog, promptDialog, pickImages } from '../ui.js';
-import { getBien, saveBien, deleteBien, listPhotos, putPhoto, deletePhoto, deletePhotosOfPiece, uid } from '../db.js';
+import { h, fill, icon, blobUrl, fmtPrice, fmtNum, fmtDate, toast, actionSheet, confirmDialog, promptDialog, pickImages } from '../ui.js';
+import { getBien, saveBien, deleteBien, listPhotos, putPhoto, deletePhoto, deletePhotosOfPiece, reorderPhotos, saveEvent, uid } from '../db.js';
 import { SECTIONS, PIECES_SUGGEREES } from '../config.js';
-import { processImage } from '../images.js';
+import { processImage, rotateImage, cropImage } from '../images.js';
 import { setTopbar, isCurrent } from '../app.js';
 import { statutInfo } from './list.js';
 import { openLightbox } from './lightbox.js';
-
+import { openCropper } from './cropper.js';
+import { renderJournal } from './journal.js';
+import { renderDocs } from './docs.js';
+import { renderAcquereursPourBien } from './acquereurs.js';
+import { formDialog } from '../dialogs.js';
 import { formatValue, isEmpty } from '../format.js';
-import { openPdfDialog } from './share.js';
+import { openShareMenu } from './share.js';
 
 /** Nom unique : « Chambre » -> « Chambre 2 » si besoin. */
 function uniqueName(name, pieces) {
@@ -18,28 +22,61 @@ function uniqueName(name, pieces) {
   return `${name} ${i}`;
 }
 
+const photoRank = (p) => (typeof p.order === 'number' ? p.order : Date.parse(p.createdAt) || 0);
+
 export async function renderDetail(view, id, token) {
   let bien = await getBien(id);
-  if (!bien) { toast('Bien introuvable'); location.hash = '#/'; return; }
+  if (!bien) { toast('Bien introuvable'); location.hash = '#/biens'; return; }
   let photos = await listPhotos(id);
   if (!isCurrent(token)) return;
 
-  setTopbar({
+  const topbar = () => setTopbar({
     title: bien.titre || 'Bien',
-    back: '#/',
+    back: '#/biens',
     actions: [
-      { icon: 'share', label: 'Annonce PDF', onClick: () => openPdfDialog(bien) },
+      { icon: 'share', label: 'Partager', onClick: () => openShareMenu(bien) },
       { icon: 'edit', label: 'Modifier', onClick: () => { location.hash = `#/bien/${encodeURIComponent(id)}/modifier`; } },
       { icon: 'more', label: 'Plus d’actions', onClick: moreActions },
     ],
   });
+  topbar();
 
   const hero = h('div', { class: 'hero' });
+  const headWrap = h('div');
+  const journalSection = h('section', { class: 'section' });
   const photosSection = h('section', { class: 'section' });
-  view.append(hero, h('div', { class: 'detail' }, header(), photosSection, infoSections()));
+  const docsSection = h('section', { class: 'section' });
+  const acqSection = h('section', { class: 'section' });
+  const infoWrap = h('div');
+  view.append(hero, h('div', { class: 'detail' }, headWrap, journalSection, acqSection, photosSection, docsSection, infoWrap));
 
+  const ctx = {
+    getBien: () => bien,
+    persist: async (b) => { bien = await saveBien(b); return bien; },
+    refresh: refreshAll,
+    addPhotos: () => choosePieceThenPhotos(),
+    addDocument: () => docs.add(),
+    onChange: () => journal.refresh(),
+  };
+
+  fill(headWrap, header());
   renderHero();
   renderPhotos();
+  fill(infoWrap, infoSections());
+  const journal = await renderJournal(journalSection, ctx);
+  const docs = await renderDocs(docsSection, ctx);
+  renderAcquereursPourBien(acqSection, bien);
+
+  async function refreshAll() {
+    bien = await getBien(id);
+    topbar();
+    fill(headWrap, header());
+    renderHero();
+    renderPhotos();
+    fill(infoWrap, infoSections());
+    await journal.refresh();
+    renderAcquereursPourBien(acqSection, bien);
+  }
 
   // ---------- En-tête ----------
   function header() {
@@ -66,72 +103,82 @@ export async function renderDetail(view, id, token) {
         href: 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(lieu),
       }, icon('pin'), lieu) : null,
       facts.length ? h('div', { class: 'facts facts-lg' }, facts.map((f) => h('span', { class: 'fact' }, f))) : null,
-      h('button', { class: 'btn btn-primary btn-share', type: 'button', onclick: () => openPdfDialog(bien) },
-        icon('share'), 'Partager l’annonce en PDF'));
+      h('div', { class: 'head-actions' },
+        h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openShareMenu(bien) }, icon('share'), 'Partager l’annonce'),
+        h('a', { class: 'btn', href: `#/simulateur/${encodeURIComponent(bien.id)}` }, icon('calculator'), 'Simuler')));
   }
 
   // ---------- Photo principale ----------
-  function coverPhoto() {
-    const byId = photos.find((p) => p.id === bien.coverPhotoId);
-    if (byId) return byId;
-    for (const piece of bien.pieces) {
-      const p = photos.find((ph) => ph.pieceId === piece.id);
-      if (p) return p;
-    }
-    return null;
+  function piecePhotos(pieceId) {
+    return photos.filter((p) => p.pieceId === pieceId);
   }
 
   function orderedPhotos() {
-    return bien.pieces.flatMap((piece) => photos.filter((p) => p.pieceId === piece.id));
+    return bien.pieces.flatMap((piece) => piecePhotos(piece.id));
+  }
+
+  function coverPhoto() {
+    return photos.find((p) => p.id === bien.coverPhotoId) || orderedPhotos()[0] || null;
   }
 
   function renderHero() {
-    hero.replaceChildren();
     const cover = coverPhoto();
     if (cover) {
       const all = orderedPhotos();
-      hero.append(h('img', { src: blobUrl(cover.blob), alt: '', onclick: () => openViewer(all, all.indexOf(cover)) }),
-        h('span', { class: 'photo-count' }, icon('camera'), String(photos.length)));
       hero.classList.remove('hero-empty');
+      fill(hero,
+        h('img', { src: blobUrl(cover.blob), alt: '', onclick: () => openViewer(all, all.indexOf(cover)) }),
+        h('span', { class: 'photo-count' }, icon('camera'), String(photos.length)));
     } else {
       hero.classList.add('hero-empty');
-      hero.append(h('button', { class: 'hero-add', type: 'button', onclick: () => addPieceThenPhotos() },
+      fill(hero, h('button', { class: 'hero-add', type: 'button', onclick: () => choosePieceThenPhotos() },
         icon('camera', 'icon-xl'), h('span', null, 'Ajouter des photos')));
     }
   }
 
-  // ---------- Photos par pièce ----------
+  // ---------- Pièces & photos ----------
   function renderPhotos() {
-    photosSection.replaceChildren(
+    const total = bien.pieces.reduce((s, p) => s + (Number(p.surface) || 0), 0);
+    const roundTotal = Math.round(total * 100) / 100;
+    const diff = total && Math.abs(roundTotal - (Number(bien.surfaceHabitable) || 0)) > 0.009;
+
+    fill(photosSection,
       h('div', { class: 'section-head' },
-        h('h3', null, 'Photos par pièce'),
-        h('button', { class: 'btn btn-sm', type: 'button', onclick: addPiece }, icon('plus'), 'Pièce')));
-
-    if (!bien.pieces.length) {
-      photosSection.append(h('div', { class: 'pieces-empty' },
-        h('p', { class: 'muted' }, 'Créez une pièce ou un emplacement, puis ajoutez-y vos photos.'),
+        h('h3', null, 'Pièces & photos'),
+        h('button', { class: 'btn btn-sm', type: 'button', onclick: addPiece }, icon('plus'), 'Pièce')),
+      total ? h('div', { class: 'pieces-total' },
+        h('span', null, 'Total des pièces : ', h('strong', null, `${fmtNum(roundTotal)} m²`)),
+        diff ? h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: async () => {
+          if (!(await confirmDialog(`Utiliser ${fmtNum(roundTotal)} m² comme surface habitable ?`, { okLabel: 'Oui' }))) return;
+          bien.surfaceHabitable = roundTotal;
+          await persist();
+          fill(headWrap, header());
+          renderPhotos();
+          fill(infoWrap, infoSections());
+        } }, 'Reporter en surface habitable') : null) : null,
+      bien.pieces.length ? null : h('div', { class: 'pieces-empty' },
+        h('p', { class: 'muted' }, 'Créez une pièce ou un emplacement, puis ajoutez-y vos photos, sa surface et vos remarques.'),
         h('div', { class: 'chips' }, ['Façade', 'Séjour', 'Cuisine', 'Chambre', 'Salle de bain', 'Jardin'].map((n) =>
-          h('button', { class: 'chip', type: 'button', onclick: () => createPiece(n) }, icon('plus'), n)))));
-      return;
-    }
-
-    bien.pieces.forEach((piece, idx) => {
-      const pPhotos = photos.filter((p) => p.pieceId === piece.id);
-      const thumbs = h('div', { class: 'thumbs' },
-        pPhotos.map((p, i) => h('button', {
-          class: 'thumb' + (p.id === bien.coverPhotoId ? ' is-cover' : ''), type: 'button',
-          onclick: () => openViewer(pPhotos, i, piece),
-        }, h('img', { src: blobUrl(p.thumb || p.blob), alt: piece.nom, loading: 'lazy' }),
-        p.id === bien.coverPhotoId ? h('span', { class: 'cover-flag' }, icon('star')) : null)),
-        h('button', { class: 'thumb thumb-add', type: 'button', onclick: () => addPhotos(piece) },
-          icon('camera'), h('span', null, 'Ajouter')));
-
-      photosSection.append(h('div', { class: 'piece' },
-        h('div', { class: 'piece-head' },
-          h('div', { class: 'piece-name' }, piece.nom, h('span', { class: 'muted small' }, ` · ${pPhotos.length} photo${pPhotos.length > 1 ? 's' : ''}`)),
-          h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Options de la pièce', onclick: () => pieceMenu(piece, idx) }, icon('more'))),
-        thumbs));
-    });
+          h('button', { class: 'chip', type: 'button', onclick: () => createPiece(n) }, icon('plus'), n)))),
+      bien.pieces.map((piece, idx) => {
+        const pPhotos = piecePhotos(piece.id);
+        return h('div', { class: 'piece' },
+          h('div', { class: 'piece-head' },
+            h('button', { class: 'piece-name', type: 'button', onclick: () => editPiece(piece) },
+              piece.nom,
+              piece.surface ? h('span', { class: 'piece-surface' }, `${fmtNum(piece.surface)} m²`) : null,
+              h('span', { class: 'muted small' }, ` · ${pPhotos.length} photo${pPhotos.length > 1 ? 's' : ''}`)),
+            h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Options de la pièce', onclick: () => pieceMenu(piece, idx) }, icon('more'))),
+          piece.remarques ? h('p', { class: 'piece-notes' }, piece.remarques) : null,
+          h('div', { class: 'thumbs' },
+            pPhotos.map((p, i) => h('button', {
+              class: 'thumb' + (p.id === bien.coverPhotoId ? ' is-cover' : ''), type: 'button',
+              onclick: () => openViewer(pPhotos, i),
+            }, h('img', { src: blobUrl(p.thumb || p.blob), alt: piece.nom, loading: 'lazy' }),
+            p.id === bien.coverPhotoId ? h('span', { class: 'cover-flag' }, icon('star')) : null)),
+            h('button', { class: 'thumb thumb-add', type: 'button', onclick: () => addPhotos(piece) },
+              icon('camera'), h('span', null, 'Ajouter'))));
+      }));
   }
 
   async function persist() {
@@ -151,13 +198,20 @@ export async function renderDetail(view, id, token) {
       placeholder: 'Ex : Chambre parentale', okLabel: 'Créer', suggestions: PIECES_SUGGEREES,
     });
     if (!nom) return null;
-    const piece = await createPiece(nom);
-    return piece;
+    return createPiece(nom);
   }
 
-  async function addPieceThenPhotos() {
-    const piece = bien.pieces[0] || await addPiece();
-    if (piece) addPhotos(piece);
+  /** Depuis le journal ou la photo vide : choisir la pièce puis ajouter les photos. */
+  async function choosePieceThenPhotos() {
+    if (!bien.pieces.length) {
+      const piece = await addPiece();
+      if (piece) addPhotos(piece);
+      return;
+    }
+    actionSheet('Dans quelle pièce ?', [
+      ...bien.pieces.map((p) => ({ label: p.nom, onClick: () => addPhotos(p) })),
+      { icon: 'plus', label: 'Nouvelle pièce…', onClick: async () => { const p = await addPiece(); if (p) addPhotos(p); } },
+    ]);
   }
 
   function addPhotos(piece) {
@@ -182,29 +236,37 @@ export async function renderDetail(view, id, token) {
         console.error(e);
       }
     }
+    if (ok) await saveEvent({ type: 'photo', bienId: bien.id, count: ok, pieceNom: piece.nom });
     await persist(); // met à jour la date de modification
     toast(ok === files.length ? `${ok} photo${ok > 1 ? 's' : ''} ajoutée${ok > 1 ? 's' : ''}` : `${ok}/${files.length} photos ajoutées (certaines illisibles)`);
     renderHero();
+    renderPhotos();
+    journal.refresh();
+  }
+
+  async function editPiece(piece) {
+    const v = await formDialog(piece.nom, [
+      { key: 'nom', label: 'Nom', required: true },
+      { key: 'surface', label: 'Surface', type: 'number', unit: 'm²' },
+      { key: 'remarques', label: 'Remarques', type: 'textarea', placeholder: 'Ex : parquet chêne, double exposition, placard 2,11 m²…' },
+    ], piece);
+    if (!v) return;
+    piece.nom = v.nom === piece.nom ? piece.nom : uniqueName(v.nom, bien.pieces.filter((p) => p !== piece));
+    piece.surface = v.surface;
+    piece.remarques = v.remarques;
+    await persist();
     renderPhotos();
   }
 
   function pieceMenu(piece, idx) {
     const actions = [
       { icon: 'camera', label: 'Ajouter des photos', onClick: () => addPhotos(piece) },
-      { icon: 'rename', label: 'Renommer', onClick: () => renamePiece(piece) },
+      { icon: 'rename', label: 'Nom, surface et remarques', onClick: () => editPiece(piece) },
     ];
     if (idx > 0) actions.push({ icon: 'up', label: 'Monter', onClick: () => movePiece(idx, -1) });
     if (idx < bien.pieces.length - 1) actions.push({ icon: 'down', label: 'Descendre', onClick: () => movePiece(idx, 1) });
     actions.push({ icon: 'trash', label: 'Supprimer la pièce', danger: true, onClick: () => removePiece(piece) });
     actionSheet(piece.nom, actions);
-  }
-
-  async function renamePiece(piece) {
-    const nom = await promptDialog('Renommer la pièce', { value: piece.nom, okLabel: 'Renommer' });
-    if (!nom || nom === piece.nom) return;
-    piece.nom = uniqueName(nom, bien.pieces.filter((p) => p !== piece));
-    await persist();
-    renderPhotos();
   }
 
   async function movePiece(idx, dir) {
@@ -216,7 +278,7 @@ export async function renderDetail(view, id, token) {
   }
 
   async function removePiece(piece) {
-    const n = photos.filter((p) => p.pieceId === piece.id).length;
+    const n = piecePhotos(piece.id).length;
     const ok = await confirmDialog(
       n ? `Supprimer « ${piece.nom} » et ses ${n} photo${n > 1 ? 's' : ''} ? Cette action est définitive.` : `Supprimer « ${piece.nom} » ?`,
       { okLabel: 'Supprimer', danger: true });
@@ -231,6 +293,12 @@ export async function renderDetail(view, id, token) {
   }
 
   // ---------- Visionneuse ----------
+  function replacePhoto(np) {
+    photos = photos.map((x) => (x.id === np.id ? np : x));
+    renderHero();
+    renderPhotos();
+  }
+
   function openViewer(list, index) {
     openLightbox({
       photos: list,
@@ -244,14 +312,46 @@ export async function renderDetail(view, id, token) {
         renderHero();
         renderPhotos();
       },
-      onMove: async (p) => {
+      onRotate: async (p, clockwise = true) => {
+        toast('Rotation…', 0);
+        const np = { ...p, ...(await rotateImage(p.blob, clockwise)) };
+        await putPhoto(np);
+        replacePhoto(np);
+        toast('Photo pivotée');
+        return np;
+      },
+      onCrop: async (p) => {
+        const rect = await openCropper(p.blob);
+        if (!rect) return null;
+        toast('Recadrage…', 0);
+        const np = { ...p, ...(await cropImage(p.blob, rect)) };
+        await putPhoto(np);
+        replacePhoto(np);
+        toast('Photo recadrée');
+        return np;
+      },
+      onShift: async (p, dir) => {
+        const list2 = piecePhotos(p.pieceId);
+        const i = list2.findIndex((x) => x.id === p.id);
+        const j = i + dir;
+        if (j < 0 || j >= list2.length) return null;
+        [list2[i], list2[j]] = [list2[j], list2[i]];
+        await reorderPhotos(list2.map((x) => x.id));
+        list2.forEach((x, k) => { x.order = k; });
+        photos.sort((a, b) => photoRank(a) - photoRank(b));
+        renderHero();
+        renderPhotos();
+        return list2;
+      },
+      onMove: (p) => {
         const others = bien.pieces.filter((x) => x.id !== p.pieceId);
-        if (!others.length) { toast('Créez d’abord une autre pièce'); return false; }
+        if (!others.length) { toast('Créez d’abord une autre pièce'); return Promise.resolve(false); }
         return new Promise((resolve) => {
           actionSheet('Déplacer vers…', others.map((piece) => ({
             label: piece.nom,
             onClick: async () => {
               p.pieceId = piece.id;
+              delete p.order;
               await putPhoto(p);
               await persist();
               toast(`Photo déplacée vers « ${piece.nom} »`);
@@ -259,7 +359,7 @@ export async function renderDetail(view, id, token) {
               renderPhotos();
               resolve(true);
             },
-          })));
+          })), { onCancel: () => resolve(false) });
         });
       },
       onDelete: async (p) => {
@@ -319,7 +419,8 @@ export async function renderDetail(view, id, token) {
   function moreActions() {
     actionSheet(bien.titre || 'Bien', [
       { icon: 'edit', label: 'Modifier les informations', onClick: () => { location.hash = `#/bien/${encodeURIComponent(id)}/modifier`; } },
-      { icon: 'share', label: 'Partager l’annonce en PDF', onClick: () => openPdfDialog(bien) },
+      { icon: 'share', label: 'Partager l’annonce', onClick: () => openShareMenu(bien) },
+      { icon: 'calculator', label: 'Simulation (honoraires, notaire, crédit)', onClick: () => { location.hash = `#/simulateur/${encodeURIComponent(bien.id)}`; } },
       { icon: 'copy', label: 'Dupliquer (sans les photos)', onClick: duplicate },
       { icon: 'trash', label: 'Supprimer le bien', danger: true, onClick: remove },
     ]);
@@ -336,10 +437,10 @@ export async function renderDetail(view, id, token) {
   }
 
   async function remove() {
-    const ok = await confirmDialog(`Supprimer définitivement « ${bien.titre || 'ce bien'} » et toutes ses photos ?`, { okLabel: 'Supprimer', danger: true });
+    const ok = await confirmDialog(`Supprimer définitivement « ${bien.titre || 'ce bien'} », ses photos, documents et son historique ?`, { okLabel: 'Supprimer', danger: true });
     if (!ok) return;
     await deleteBien(bien.id);
     toast('Bien supprimé');
-    location.hash = '#/';
+    location.hash = '#/biens';
   }
 }

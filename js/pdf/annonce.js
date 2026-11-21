@@ -1,11 +1,11 @@
 // Mise en page automatique de l'annonce PDF d'un bien.
 // Les informations privées (propriétaire, notes, mandat) ne sont JAMAIS incluses.
-import { PdfDoc, PAGE_W, PAGE_H, wrapText, textWidth, prepareJpeg } from './writer.js';
+import { PdfDoc, PAGE_W, PAGE_H, wrapText, textWidth, prepareJpeg, imageSize } from './writer.js';
 import { SECTIONS } from '../config.js';
 import { fmtPrice, fmtNum } from '../ui.js';
 import { formatValue, isEmpty, orderPhotos } from '../format.js';
 
-const C = {
+export const C = {
   text: [23, 32, 43],
   muted: [102, 113, 127],
   primary: [31, 78, 121],
@@ -14,11 +14,11 @@ const C = {
   line: [221, 226, 233],
   white: [255, 255, 255],
 };
-const ENERGY = {
+export const ENERGY = {
   A: [0, 156, 109], B: [82, 177, 83], C: [165, 204, 116], D: [244, 231, 15],
   E: [240, 180, 15], F: [235, 130, 53], G: [215, 34, 31],
 };
-const DARK_LETTERS = new Set(['C', 'D', 'E']);
+export const DARK_LETTERS = new Set(['C', 'D', 'E']);
 
 const M = 40;                    // marge
 const W = PAGE_W - 2 * M;        // largeur utile
@@ -26,7 +26,7 @@ const BOTTOM = PAGE_H - 58;      // limite basse du contenu (au-dessus du pied d
 
 // Champs jamais affichés dans le tableau des caractéristiques
 // (déjà affichés ailleurs, ou internes à l'agence).
-const SKIP = new Set(['titre', 'reference', 'statut', 'mandat', 'dateMandat', 'description',
+const SKIP = new Set(['titre', 'reference', 'statut', 'mandat', 'dateMandat', 'finMandat', 'description',
   'equipements', 'prix', 'transaction', 'typeBien', 'codePostal', 'ville', 'adresse']);
 
 export const DEFAULT_OPTIONS = { prix: true, adresse: false, photos: true, complements: true };
@@ -116,10 +116,18 @@ export async function buildAnnoncePdf(bien, photos, agence = {}, opts = DEFAULT_
   progress('Mise en page…');
   newPage(true);
 
-  // En-tête : agence + référence
-  page.text(agence.nom || 'Annonce immobilière', M, y + 11, { size: 12, bold: true, color: C.primary });
-  if (bien.reference) page.text('Réf. ' + bien.reference, PAGE_W - M, y + 11, { size: 9, color: C.muted, align: 'right' });
-  y += 18;
+  // En-tête : logo + agence + référence
+  let nameX = M;
+  let headH = 18;
+  if (agence.logo) {
+    const lw = await drawLogo(doc, page, agence.logo, M, y - 4, 120, 30);
+    if (lw) { nameX = M + lw + 10; headH = 30; }
+  }
+  if (agence.nom || nameX === M) {
+    page.text(agence.nom || 'Annonce immobilière', nameX, y + headH / 2 + 3, { size: 12, bold: true, color: C.primary });
+  }
+  if (bien.reference) page.text('Réf. ' + bien.reference, PAGE_W - M, y + headH / 2 + 3, { size: 9, color: C.muted, align: 'right' });
+  y += headH;
   page.line(M, y, PAGE_W - M, y, C.line);
   y += 12;
 
@@ -271,8 +279,23 @@ export async function buildAnnoncePdf(bien, photos, agence = {}, opts = DEFAULT_
   return doc.toBlob();
 }
 
-export function pdfFileName(bien) {
-  const base = ['Annonce', bien.reference, bien.titre].filter(Boolean).join(' - ')
+/** Dessine le logo dans une boîte maxW x maxH (proportions conservées). Retourne la largeur utilisée. */
+export async function drawLogo(doc, page, blob, x, y, maxW, maxH) {
+  try {
+    const { w, h } = await imageSize(blob);
+    const scale = Math.min(maxW / w, maxH / h);
+    const lw = w * scale;
+    const lh = h * scale;
+    const j = await prepareJpeg(blob, lw, lh, 3, 0.9);
+    page.image(doc.addJpeg(j.bytes, j.w, j.h), x, y + (maxH - lh) / 2, lw, lh);
+    return lw;
+  } catch (e) {
+    return 0;
+  }
+}
+
+export function pdfFileName(bien, prefix = 'Annonce') {
+  const base = [prefix, bien.reference, bien.titre].filter(Boolean).join(' - ')
     .replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim().slice(0, 90);
   return (base || 'Annonce') + '.pdf';
 }

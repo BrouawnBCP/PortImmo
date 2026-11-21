@@ -81,7 +81,10 @@ export function wrapText(str, size, bold, maxWidth) {
 }
 
 export class PdfDoc {
-  constructor() {
+  /** Par défaut A4 portrait. Pour A4 paysage : new PdfDoc(PAGE_H, PAGE_W). */
+  constructor(width = PAGE_W, height = PAGE_H) {
+    this.w = width;
+    this.h = height;
     this.pages = [];
     this.images = [];
   }
@@ -139,7 +142,7 @@ export class PdfDoc {
     this.pages.forEach((page, i) => {
       const content = enc.encode(page.ops.join('\n'));
       startObj(pageNum(i));
-      push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(PAGE_W)} ${n(PAGE_H)}] `
+      push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(this.w)} ${n(this.h)}] `
         + `/Resources << /Font << /F1 3 0 R /F2 4 0 R >> /XObject << ${xobjects} >> >> `
         + `/Contents ${pageNum(i) + 1} 0 R >>\nendobj\n`);
       startObj(pageNum(i) + 1);
@@ -168,19 +171,42 @@ class PdfPage {
     let tx = x;
     if (align === 'right') tx = x - textWidth(str, size, bold);
     else if (align === 'center') tx = x - textWidth(str, size, bold) / 2;
-    this.ops.push(`BT /${bold ? 'F2' : 'F1'} ${n(size)} Tf ${rgb(color)} rg ${n(tx)} ${n(PAGE_H - y)} Td ${pdfString(str)} Tj ET`);
+    this.ops.push(`BT /${bold ? 'F2' : 'F1'} ${n(size)} Tf ${rgb(color)} rg ${n(tx)} ${n(this.doc.h - y)} Td ${pdfString(str)} Tj ET`);
   }
 
   rect(x, y, w, h, color) {
-    this.ops.push(`${rgb(color)} rg ${n(x)} ${n(PAGE_H - y - h)} ${n(w)} ${n(h)} re f`);
+    this.ops.push(`${rgb(color)} rg ${n(x)} ${n(this.doc.h - y - h)} ${n(w)} ${n(h)} re f`);
+  }
+
+  /** Polygone plein ; points [[x, y], …] depuis le haut de la page. */
+  polygon(points, color) {
+    const [first, ...rest] = points;
+    this.ops.push(`${rgb(color)} rg ${n(first[0])} ${n(this.doc.h - first[1])} m `
+      + rest.map(([x, y]) => `${n(x)} ${n(this.doc.h - y)} l`).join(' ') + ' h f');
   }
 
   line(x1, y1, x2, y2, color, width = 0.5) {
-    this.ops.push(`${rgb(color)} RG ${n(width)} w ${n(x1)} ${n(PAGE_H - y1)} m ${n(x2)} ${n(PAGE_H - y2)} l S`);
+    this.ops.push(`${rgb(color)} RG ${n(width)} w ${n(x1)} ${n(this.doc.h - y1)} m ${n(x2)} ${n(this.doc.h - y2)} l S`);
   }
 
   image(id, x, y, w, h) {
-    this.ops.push(`q ${n(w)} 0 0 ${n(h)} ${n(x)} ${n(PAGE_H - y - h)} cm /Im${id} Do Q`);
+    this.ops.push(`q ${n(w)} 0 0 ${n(h)} ${n(x)} ${n(this.doc.h - y - h)} cm /Im${id} Do Q`);
+  }
+}
+
+/** Dimensions (px) d'une image. */
+export async function imageSize(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error('Image illisible'));
+      im.src = url;
+    });
+    return { w: img.naturalWidth, h: img.naturalHeight };
+  } finally {
+    URL.revokeObjectURL(url);
   }
 }
 

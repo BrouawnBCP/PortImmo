@@ -2,6 +2,7 @@ import { h, icon, blobUrl, fmtPrice, fmtNum } from '../ui.js';
 import { listBiens, getCoverThumb, countPhotos } from '../db.js';
 import { STATUTS } from '../config.js';
 import { setTopbar } from '../app.js';
+import { backupReminder } from '../backup.js';
 
 const FILTRES = [
   { id: 'actifs', label: 'Actifs', test: (b) => b.statut !== 'archive' },
@@ -55,10 +56,13 @@ export async function renderList(view) {
   }, TRIS.map((t) => h('option', { value: t.id }, t.label)));
 
   view.append(
+    ...[await backupReminder()].filter(Boolean),
     h('div', { class: 'list-toolbar' },
       h('div', { class: 'search' }, icon('search'), search),
       chips,
-      h('div', { class: 'list-meta' }, count, sort)),
+      h('div', { class: 'list-meta' }, count, h('div', { class: 'list-meta-right' },
+        h('a', { class: 'btn btn-sm', href: '#/carte' }, icon('map'), 'Carte'),
+        sort))),
     results,
     h('a', { class: 'fab', href: '#/bien/nouveau', 'aria-label': 'Ajouter un bien' }, icon('plus'), h('span', null, 'Ajouter un bien')),
   );

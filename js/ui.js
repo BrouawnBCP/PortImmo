@@ -27,6 +27,13 @@ function append(el, children) {
 
 export function clear(el) { while (el.firstChild) el.firstChild.remove(); }
 
+/** Remplace le contenu d'un élément (ignore null/false, accepte des tableaux). */
+export function fill(el, ...children) {
+  clear(el);
+  append(el, children);
+  return el;
+}
+
 // ---------- Icônes (tracés type « Lucide », licence ISC) ----------
 const ICONS = {
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
@@ -57,6 +64,24 @@ const ICONS = {
   check: '<path d="M20 6 9 17l-5-5"/>',
   rename: '<path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/>',
   up: '<path d="m18 15-6-6-6 6"/>',
+  calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+  euro: '<path d="M4 10h12"/><path d="M4 14h9"/><path d="M19 6a7.7 7.7 0 0 0-5.2-2A7.9 7.9 0 0 0 6 12c0 4.4 3.5 8 7.8 8 2 0 3.8-.8 5.2-2"/>',
+  tag: '<path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/>',
+  note: '<path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/>',
+  flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>',
+  clip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  rotate: '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+  crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>',
+  sparkles: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 3v4"/><path d="M21 5h-4"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  dashboard: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+  calculator: '<rect width="16" height="20" x="4" y="2" rx="2"/><path d="M8 6h8"/><path d="M16 14v4"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/>',
+  map: '<path d="M14.1 5.55a2 2 0 0 0 1.79 0l3.66-1.83A1 1 0 0 1 21 4.62v12.76a1 1 0 0 1-.55.9l-4.56 2.27a2 2 0 0 1-1.79 0l-4.2-2.1a2 2 0 0 0-1.8 0l-3.65 1.83A1 1 0 0 1 3 19.38V6.62a1 1 0 0 1 .55-.9l4.56-2.27a2 2 0 0 1 1.79 0z"/><path d="M15 5.76v15"/><path d="M9 3.24v15"/>',
+  list: '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
+  alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  message: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  printer: '<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
   share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98"/><path d="m15.41 6.51-6.82 3.98"/>',
   file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
   eye: '<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>',
@@ -94,6 +119,42 @@ const num = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
 export const fmtPrice = (v) => (v === '' || v == null ? '' : eur.format(v));
 export const fmtNum = (v) => (v === '' || v == null ? '' : num.format(v));
 export const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('fr-FR') : '');
+export const fmtDateTime = (iso) => (iso
+  ? new Date(iso).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  : '');
+
+/** Le navigateur sait-il partager des fichiers (téléphones) ? */
+export function canShareFiles(type = 'application/pdf') {
+  try {
+    return !!(navigator.canShare && navigator.canShare({ files: [new File(['x'], 'test', { type })] }));
+  } catch (e) { return false; }
+}
+
+/** Télécharge un fichier (Blob/File). */
+export function downloadFile(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+/** Partage un fichier si possible (téléphone), sinon le télécharge. Doit partir d'un toucher. */
+export async function shareOrDownload(file, { title = '', text = '' } = {}) {
+  if (canShareFiles(file.type) && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent)) {
+    try {
+      await navigator.share({ files: [file], title, text });
+      return true;
+    } catch (e) {
+      if (e.name === 'AbortError') return false;
+    }
+  }
+  downloadFile(file, file.name);
+  return true;
+}
 
 // ---------- Toast ----------
 let toastTimer;
@@ -110,7 +171,10 @@ export function openOverlay(content, { onClose, kind = 'sheet' } = {}) {
   const overlay = h('div', { class: `overlay overlay-${kind}` });
   const panel = h('div', { class: `panel panel-${kind}`, role: 'dialog', 'aria-modal': 'true' }, content);
   overlay.append(panel);
+  let closed = false;
   const close = () => {
+    if (closed) return;
+    closed = true;
     document.removeEventListener('keydown', onKey);
     overlay.classList.remove('open');
     setTimeout(() => overlay.remove(), 180);
@@ -125,19 +189,20 @@ export function openOverlay(content, { onClose, kind = 'sheet' } = {}) {
 }
 
 /** Menu d'actions (feuille du bas sur mobile). */
-export function actionSheet(title, actions) {
+export function actionSheet(title, actions, { onCancel } = {}) {
   let ctl;
+  let chosen = false;
   const list = actions.map((a) =>
     h('button', {
       class: 'sheet-action' + (a.danger ? ' danger' : ''),
       type: 'button',
-      onclick: () => { ctl.close(); a.onClick(); },
+      onclick: () => { chosen = true; ctl.close(); a.onClick(); },
     }, a.icon ? icon(a.icon) : null, a.label));
   ctl = openOverlay([
     title ? h('div', { class: 'sheet-title' }, title) : null,
     ...list,
     h('button', { class: 'sheet-action cancel', type: 'button', onclick: () => ctl.close() }, 'Annuler'),
-  ]);
+  ], { onClose: () => { if (!chosen && onCancel) onCancel(); } });
 }
 
 export function confirmDialog(message, { okLabel = 'Confirmer', danger = false } = {}) {
@@ -177,6 +242,16 @@ export function promptDialog(title, { value = '', placeholder = '', okLabel = 'O
         h('button', { class: 'btn btn-primary', type: 'button', onclick: submit }, okLabel)),
     ], { kind: 'dialog', onClose: () => finish(null) });
     setTimeout(() => { if (!suggestions.length || value) input.focus(); }, 60);
+  });
+}
+
+/** Ouvre le sélecteur de fichiers quelconques. */
+export function pickFiles({ accept = '*/*', multiple = false } = {}) {
+  return new Promise((resolve) => {
+    const input = h('input', { type: 'file', accept, multiple, style: { display: 'none' } });
+    input.addEventListener('change', () => { resolve(Array.from(input.files || [])); input.remove(); });
+    document.body.append(input);
+    input.click();
   });
 }
 

@@ -38,6 +38,7 @@ export const SECTIONS = [
       { key: 'typeBien', label: 'Type de bien', type: 'select', options: TYPES_BIEN },
       { key: 'mandat', label: 'Mandat', type: 'select', options: ['Simple', 'Exclusif', 'Semi-exclusif'] },
       { key: 'dateMandat', label: 'Date du mandat', type: 'date' },
+      { key: 'finMandat', label: 'Fin du mandat', type: 'date' },
     ],
   },
   {
