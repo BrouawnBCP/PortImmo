@@ -5,13 +5,14 @@ import { SECTIONS } from '../config.js';
 import { fmtPrice, fmtNum } from '../ui.js';
 import { formatValue, isEmpty, orderPhotos } from '../format.js';
 
+// Charte « Riviera »
 export const C = {
-  text: [23, 32, 43],
-  muted: [102, 113, 127],
-  primary: [31, 78, 121],
-  accent: [200, 150, 62],
-  soft: [238, 243, 248],
-  line: [221, 226, 233],
+  text: [30, 42, 58],
+  muted: [116, 104, 91],
+  primary: [31, 59, 87],
+  accent: [184, 134, 59],
+  soft: [246, 239, 228],
+  line: [234, 220, 198],
   white: [255, 255, 255],
 };
 export const ENERGY = {

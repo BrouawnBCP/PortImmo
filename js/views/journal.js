@@ -16,8 +16,13 @@ export const OFFRE_STATUTS = [
   { value: 'refusee', label: 'Refusée' },
   { value: 'retiree', label: 'Retirée' },
 ];
-const BADGE = { prevue: 'blue', faite: 'green', annulee: 'grey', attente: 'orange', acceptee: 'green', refusee: 'grey', retiree: 'grey' };
-const ICON = { visite: 'calendar', offre: 'euro', prix: 'tag', statut: 'flag', note: 'note', photo: 'camera', document: 'clip' };
+export const RAPPEL_STATUTS = [
+  { value: 'a_faire', label: 'À faire' },
+  { value: 'fait', label: 'Fait' },
+];
+export const RAPPEL_NATURES = ['Appel', 'Rendez-vous', 'Relance', 'Signature', 'Autre'];
+const BADGE = { prevue: 'blue', faite: 'green', annulee: 'grey', attente: 'orange', acceptee: 'green', refusee: 'grey', retiree: 'grey', a_faire: 'blue', fait: 'green' };
+const ICON = { visite: 'calendar', offre: 'euro', prix: 'tag', statut: 'flag', note: 'note', photo: 'camera', document: 'clip', rappel: 'bell' };
 const label = (list, v) => (list.find((x) => x.value === v) || {}).label || v;
 const statutLabel = (v) => label(STATUTS, v);
 
@@ -83,8 +88,62 @@ export async function editNote(bien, ev = null) {
   return saveEvent({ ...ev, ...v, type: 'note', bienId: bien.id, date: fromLocalInput(v.date) });
 }
 
+/**
+ * Rappel ou rendez-vous (appel à passer, relance, signature…). bien peut être null
+ * (rappel général depuis l'accueil) : on peut alors choisir un bien dans la liste.
+ */
+export async function editRappel(bien, ev = null, biens = null) {
+  const { list, datalist } = await acquereurField();
+  const fields = [
+    { key: 'nature', label: 'Type', type: 'select', options: RAPPEL_NATURES },
+    { key: 'date', label: 'Date et heure', type: 'datetime', required: true },
+    { key: 'acquereurNom', label: 'Contact', datalist, placeholder: 'Nom de la personne' },
+    { key: 'telephone', label: 'Téléphone', type: 'tel', placeholder: 'Pour appeler en un geste' },
+    { key: 'motif', label: 'Objet', type: 'textarea', rows: 2, placeholder: 'Ex : rappeler pour le retour de visite' },
+    { key: 'statut', label: 'Statut', type: 'select', options: RAPPEL_STATUTS },
+  ];
+  if (!bien && biens) {
+    fields.splice(2, 0, { key: 'bienId', label: 'Bien concerné', type: 'select', options: [{ value: '', label: 'Aucun' }, ...biens.map((b) => ({ value: b.id, label: b.titre || 'Sans titre' }))] });
+  }
+  const def = new Date(Date.now() + 3600e3);
+  def.setMinutes(0, 0, 0);
+  const v = await formDialog(ev ? 'Modifier le rappel' : 'Rappel ou rendez-vous', fields, {
+    nature: 'Appel', ...ev,
+    date: toLocalInput(ev ? ev.date : def.toISOString()),
+    statut: ev ? ev.statut : 'a_faire',
+  });
+  if (!v) return null;
+  const linked = linkAcquereur(v, list);
+  if (!linked.telephone && linked.acquereurId) {
+    const a = list.find((x) => x.id === linked.acquereurId);
+    if (a && a.telephone) linked.telephone = a.telephone;
+  }
+  const bienId = bien ? bien.id : (v.bienId || (ev && ev.bienId) || null);
+  const saved = await saveEvent({ ...ev, ...linked, type: 'rappel', bienId, date: fromLocalInput(v.date) });
+  toast(ev ? 'Rappel modifié' : 'Rappel ajouté');
+  return saved;
+}
+
+/** Menu d'actions d'un rappel (accueil et journal). */
+export function rappelActions(ev, bien, onChange) {
+  const actions = [];
+  if (ev.statut !== 'fait') {
+    actions.push({ icon: 'check', label: 'Marquer comme fait', onClick: async () => { await saveEvent({ ...ev, statut: 'fait' }); onChange(); } });
+  }
+  if (ev.telephone) {
+    actions.push({ icon: 'phone', label: `Appeler ${ev.acquereurNom || ''} (${ev.telephone})`, onClick: () => { location.href = 'tel:' + ev.telephone.replace(/\s/g, ''); } });
+  }
+  actions.push({ icon: 'calendar', label: 'Ajouter au calendrier', onClick: () => exportIcs(bien, ev) });
+  actions.push({ icon: 'edit', label: 'Modifier', onClick: async () => { if (await editRappel(bien, ev)) onChange(); } });
+  if (bien) actions.push({ icon: 'building', label: 'Voir le bien', onClick: () => { location.hash = `#/bien/${encodeURIComponent(bien.id)}`; } });
+  actions.push({ icon: 'trash', label: 'Supprimer', danger: true, onClick: async () => {
+    if (await confirmDialog('Supprimer ce rappel ?', { okLabel: 'Supprimer', danger: true })) { await deleteEvent(ev.id); onChange(); }
+  } });
+  actionSheet(eventTitle(ev), actions);
+}
+
 // ---------------------------------------------------------------------------
-// Export d'une visite vers le calendrier du téléphone (.ics)
+// Export d'une visite / d'un rappel vers le calendrier du téléphone (.ics)
 // ---------------------------------------------------------------------------
 
 function icsDate(iso) {
@@ -92,10 +151,16 @@ function icsDate(iso) {
 }
 const icsText = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
 
-export function exportVisiteIcs(bien, ev) {
+export const exportVisiteIcs = (bien, ev) => exportIcs(bien, ev);
+
+export function exportIcs(bien, ev) {
+  bien = bien || {};
   const start = new Date(ev.date);
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const end = new Date(start.getTime() + (ev.type === 'rappel' && ev.nature === 'Appel' ? 15 : 60) * 60 * 1000);
   const lieu = [bien.adresse, bien.codePostal, bien.ville].filter(Boolean).join(' ');
+  const summary = ev.type === 'rappel'
+    ? `${ev.nature || 'Rappel'}${ev.acquereurNom ? ' – ' + ev.acquereurNom : ''}${bien.titre ? ' (' + bien.titre + ')' : ''}`
+    : `Visite – ${bien.titre || 'Bien'}${ev.acquereurNom ? ' (' + ev.acquereurNom + ')' : ''}`;
   const ics = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//PortImmo//FR', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
     'BEGIN:VEVENT',
@@ -103,13 +168,14 @@ export function exportVisiteIcs(bien, ev) {
     `DTSTAMP:${icsDate(new Date().toISOString())}`,
     `DTSTART:${icsDate(start.toISOString())}`,
     `DTEND:${icsDate(end.toISOString())}`,
-    `SUMMARY:${icsText(`Visite – ${bien.titre || 'Bien'}${ev.acquereurNom ? ' (' + ev.acquereurNom + ')' : ''}`)}`,
+    `SUMMARY:${icsText(summary)}`,
     lieu ? `LOCATION:${icsText(lieu)}` : null,
-    `DESCRIPTION:${icsText([bien.reference ? 'Réf. ' + bien.reference : '', ev.compteRendu].filter(Boolean).join('\n'))}`,
-    'BEGIN:VALARM', 'TRIGGER:-PT1H', 'ACTION:DISPLAY', 'DESCRIPTION:Visite dans 1 heure', 'END:VALARM',
+    `DESCRIPTION:${icsText([bien.reference ? 'Réf. ' + bien.reference : '', ev.telephone ? 'Tél. ' + ev.telephone : '', ev.motif, ev.compteRendu].filter(Boolean).join('\n'))}`,
+    'BEGIN:VALARM', `TRIGGER:${ev.type === 'rappel' ? '-PT15M' : '-PT1H'}`, 'ACTION:DISPLAY', `DESCRIPTION:${icsText(summary)}`, 'END:VALARM',
     'END:VEVENT', 'END:VCALENDAR',
   ].filter(Boolean).join('\r\n');
-  downloadFile(new File([ics], `Visite ${fmtDate(ev.date).replace(/\//g, '-')}.ics`, { type: 'text/calendar' }), `Visite ${fmtDate(ev.date).replace(/\//g, '-')}.ics`);
+  const name = `${ev.type === 'rappel' ? (ev.nature || 'Rappel') : 'Visite'} ${fmtDate(ev.date).replace(/\//g, '-')}.ics`;
+  downloadFile(new File([ics], name, { type: 'text/calendar' }), name);
 }
 
 // ---------------------------------------------------------------------------
@@ -130,16 +196,23 @@ export function eventTitle(ev) {
     case 'note': return 'Note';
     case 'photo': return `${ev.count} photo${ev.count > 1 ? 's' : ''} ajoutée${ev.count > 1 ? 's' : ''}` + (ev.pieceNom ? ' — ' + ev.pieceNom : '');
     case 'document': return 'Document ajouté — ' + (ev.nom || '');
+    case 'rappel': return (ev.nature || 'Rappel') + (ev.acquereurNom ? ' — ' + ev.acquereurNom : '');
     default: return ev.type;
   }
 }
 
-const isPast = (iso) => new Date(iso).getTime() < Date.now();
+const isPast = (iso) => new Date(iso).getTime() < Date.now() - 2 * 3600e3;
+
+/** Visite prévue passée ou rappel non fait dépassé. */
+export function enRetard(ev) {
+  return (ev.type === 'visite' && ev.statut === 'prevue' && isPast(ev.date))
+    || (ev.type === 'rappel' && ev.statut !== 'fait' && isPast(ev.date));
+}
 
 export function eventRow(ev, onClick, { showBien = null } = {}) {
-  const status = ev.type === 'visite' ? ev.statut : ev.type === 'offre' ? ev.statut : null;
-  const statusLabel = ev.type === 'visite' ? label(VISITE_STATUTS, status) : label(OFFRE_STATUTS, status);
-  const aCompleter = ev.type === 'visite' && ev.statut === 'prevue' && isPast(ev.date);
+  const status = ['visite', 'offre', 'rappel'].includes(ev.type) ? ev.statut : null;
+  const statusLabel = ev.type === 'visite' ? label(VISITE_STATUTS, status) : ev.type === 'rappel' ? label(RAPPEL_STATUTS, status) : label(OFFRE_STATUTS, status);
+  const aCompleter = enRetard(ev);
   const detail = ev.compteRendu || ev.conditions || ev.texte || ev.motif || '';
   return h('button', { class: 'event', type: 'button', onclick: onClick },
     h('span', { class: `event-icon ev-${ev.type}` }, icon(ICON[ev.type] || 'note')),
@@ -147,7 +220,7 @@ export function eventRow(ev, onClick, { showBien = null } = {}) {
       h('span', { class: 'event-top' },
         h('span', { class: 'event-title' }, eventTitle(ev)),
         status ? h('span', { class: `badge badge-${BADGE[status] || 'grey'}` }, statusLabel) : null,
-        aCompleter ? h('span', { class: 'badge badge-orange' }, 'À compléter') : null),
+        aCompleter ? h('span', { class: 'badge badge-orange' }, ev.type === 'rappel' ? 'En retard' : 'À compléter') : null),
       showBien ? h('span', { class: 'event-bien' }, showBien) : null,
       h('span', { class: 'event-date muted' }, fmtDateTime(ev.date), ev.type === 'visite' ? stars(ev.avis) : null),
       detail ? h('span', { class: 'event-detail' }, detail) : null));
@@ -194,6 +267,7 @@ export async function renderJournal(section, ctx) {
 
   function openEvent(ev) {
     const bien = ctx.getBien();
+    if (ev.type === 'rappel') { rappelActions(ev, bien, refreshJournal); return; }
     const actions = [];
     if (ev.type === 'visite') {
       if (ev.statut === 'prevue') {
@@ -227,7 +301,8 @@ export async function renderJournal(section, ctx) {
     const bien = ctx.getBien();
     events = await listEvents(bien.id);
     const now = Date.now();
-    const prochaines = events.filter((e) => e.type === 'visite' && e.statut === 'prevue' && new Date(e.date).getTime() >= now - 2 * 3600e3)
+    const prochaines = events.filter((e) => ((e.type === 'visite' && e.statut === 'prevue') || (e.type === 'rappel' && e.statut !== 'fait'))
+      && new Date(e.date).getTime() >= now - 2 * 3600e3)
       .sort((a, b) => a.date.localeCompare(b.date));
     const offresAttente = events.filter((e) => e.type === 'offre' && e.statut === 'attente');
     const meilleure = offresAttente.reduce((m, e) => (Number(e.montant) > (m ? Number(m.montant) : 0) ? e : m), null);
@@ -241,16 +316,17 @@ export async function renderJournal(section, ctx) {
       h('div', { class: 'quick-adds' },
         add('calendar', 'Visite', async () => { if (await editVisite(bien)) refreshJournal(); }),
         add('euro', 'Offre', async () => { if (await editOffre(bien, null, onOffreAcceptee)) ctx.refresh(); }),
+        add('bell', 'Rappel', async () => { if (await editRappel(bien)) refreshJournal(); }),
         add('tag', 'Prix', changePrix),
         add('note', 'Note', async () => { if (await editNote(bien)) refreshJournal(); }),
         add('camera', 'Photo', () => ctx.addPhotos()),
         add('clip', 'Document', () => ctx.addDocument())),
       h('div', { class: 'summary-cards' },
         h('div', { class: 'summary-card' },
-          h('div', { class: 'summary-label' }, 'Prochaine visite'),
+          h('div', { class: 'summary-label' }, 'À venir'),
           prochaines.length
             ? [h('div', { class: 'summary-value' }, fmtDateTime(prochaines[0].date)),
-              h('div', { class: 'small muted' }, prochaines[0].acquereurNom || '', prochaines.length > 1 ? ` (+${prochaines.length - 1} autre${prochaines.length > 2 ? 's' : ''})` : '')]
+              h('div', { class: 'small muted' }, eventTitle(prochaines[0]), prochaines.length > 1 ? ` (+${prochaines.length - 1})` : '')]
             : h('div', { class: 'summary-value muted' }, 'Aucune')),
         h('div', { class: 'summary-card' },
           h('div', { class: 'summary-label' }, 'Offres en attente'),

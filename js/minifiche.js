@@ -5,9 +5,9 @@ import { isEmpty, orderPhotos } from './format.js';
 
 const W = 1080;
 const H = 1350;
-const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
-const COL = {
-  primary: '#1f4e79', accent: '#c8963e', text: '#17202b', muted: '#66717f', soft: '#eef3f8', white: '#ffffff',
+const FONT = 'Nunito, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+const COL = { // charte « Riviera »
+  primary: '#1f3b57', accent: '#b8863b', text: '#1e2a3a', muted: '#74685b', soft: '#f6efe4', white: '#ffffff',
 };
 const ENERGY = { A: '#009c6d', B: '#52b153', C: '#a5cc74', D: '#f4e70f', E: '#f0b40f', F: '#eb8235', G: '#d7221f' };
 
@@ -50,6 +50,8 @@ export function statusLabel(bien) {
 }
 
 export async function buildMiniFiche(bien, photos, agence = {}, { prix = true } = {}) {
+  // La police Nunito doit être chargée avant de dessiner le texte.
+  try { await Promise.all([document.fonts.load(`800 40px Nunito`), document.fonts.load(`700 30px Nunito`), document.fonts.load(`600 24px Nunito`)]); } catch (e) { /* police système */ }
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
