@@ -68,8 +68,9 @@ router();
 // Premier lancement : ajoute l'annonce d'exemple puis rafraîchit l'écran.
 loadDemoOnFirstLaunch().then((loaded) => {
   if (!loaded) return;
-  toast("Une annonce d'exemple a été ajoutée");
-  if (['', '#', '#/'].includes(location.hash)) router(); // ne pas interrompre une saisie en cours
+  toast("Annonce d'exemple chargée");
+  // rafraîchit l'écran sauf pendant une saisie
+  if (!/\/(modifier|nouveau)$/.test(location.hash)) router();
 });
 
 // ---------- Service worker (fonctionnement hors-ligne + installation) ----------

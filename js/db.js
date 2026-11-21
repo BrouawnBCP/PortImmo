@@ -82,19 +82,41 @@ export function deleteBien(id) {
 }
 
 // ---------- Photos ----------
+// Les images sont stockées en données brutes (ArrayBuffer + type) et NON en Blob :
+// Safari sur iPhone perd parfois les Blob enregistrés dans IndexedDB (photos illisibles).
+// En mémoire, l'application manipule toujours photo.blob / photo.thumb (Blob).
+
+async function toRecord(photo) {
+  const { blob, thumb, ...rest } = photo;
+  const rec = { ...rest };
+  if (blob) { rec.data = await blob.arrayBuffer(); rec.type = blob.type || 'image/jpeg'; }
+  if (thumb) { rec.thumbData = await thumb.arrayBuffer(); rec.thumbType = thumb.type || 'image/jpeg'; }
+  return rec;
+}
+
+function fromRecord(rec) {
+  if (!rec) return rec;
+  const { data, type, thumbData, thumbType, ...rest } = rec;
+  const p = { ...rest };
+  p.blob = data ? new Blob([data], { type }) : (rec.blob || null);       // rec.blob : ancien format
+  p.thumb = thumbData ? new Blob([thumbData], { type: thumbType }) : (rec.thumb || null);
+  return p;
+}
 
 export async function listPhotos(bienId) {
   const list = await run('photos', 'readonly', (t) =>
     reqP(t.objectStore('photos').index('bienId').getAll(bienId)));
-  return list.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  return list.map(fromRecord).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
 }
 
-export function getPhoto(id) {
-  return run('photos', 'readonly', (t) => reqP(t.objectStore('photos').get(id)));
+export async function getPhoto(id) {
+  return fromRecord(await run('photos', 'readonly', (t) => reqP(t.objectStore('photos').get(id))));
 }
 
-export function putPhoto(photo) {
-  return run('photos', 'readwrite', (t) => { t.objectStore('photos').put(photo); return photo; });
+export async function putPhoto(photo) {
+  const rec = await toRecord(photo); // conversion AVANT d'ouvrir la transaction
+  await run('photos', 'readwrite', (t) => { t.objectStore('photos').put(rec); });
+  return photo;
 }
 
 export function deletePhoto(id) {
@@ -152,14 +174,19 @@ function blobToDataUrl(blob) {
   });
 }
 
-async function dataUrlToBlob(url) {
-  const res = await fetch(url);
-  return res.blob();
+/** data:image/...;base64,xxx -> { data: ArrayBuffer, type } (sans fetch, fiable sur iPhone). */
+function dataUrlToBuffer(url) {
+  const [head, b64] = url.split(',');
+  const type = (head.match(/^data:([^;]+)/) || [])[1] || 'image/jpeg';
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { data: bytes.buffer, type };
 }
 
 export async function exportAll() {
   const biens = await listBiens();
-  const photosRaw = await run('photos', 'readonly', (t) => reqP(t.objectStore('photos').getAll()));
+  const photosRaw = (await run('photos', 'readonly', (t) => reqP(t.objectStore('photos').getAll()))).map(fromRecord);
   const photos = [];
   for (const p of photosRaw) {
     photos.push({
@@ -176,11 +203,11 @@ export async function importAll(data) {
   if (!data || data.app !== 'portimmo') throw new Error('Fichier de sauvegarde invalide');
   const photos = [];
   for (const p of data.photos || []) {
-    photos.push({
-      ...p,
-      blob: p.blob ? await dataUrlToBlob(p.blob) : null,
-      thumb: p.thumb ? await dataUrlToBlob(p.thumb) : null,
-    });
+    const { blob, thumb, ...rest } = p;
+    const rec = { ...rest };
+    if (blob) { const b = dataUrlToBuffer(blob); rec.data = b.data; rec.type = b.type; }
+    if (thumb) { const t = dataUrlToBuffer(thumb); rec.thumbData = t.data; rec.thumbType = t.type; }
+    photos.push(rec);
   }
   await run(['biens', 'photos'], 'readwrite', (t) => {
     const sb = t.objectStore('biens');
