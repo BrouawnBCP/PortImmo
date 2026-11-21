@@ -1,6 +1,7 @@
 import { h, icon, toast, confirmDialog } from '../ui.js';
 import { exportAll, importAll, listBiens } from '../db.js';
 import { setTopbar, installPrompt } from '../app.js';
+import { loadDemo } from '../demo.js';
 
 const fmtSize = (b) => (b > 1e9 ? (b / 1e9).toFixed(1) + ' Go' : (b / 1e6).toFixed(1) + ' Mo');
 
@@ -48,6 +49,10 @@ export async function renderSettings(view) {
         h('button', { class: 'btn', type: 'button', onclick: onExport }, icon('download'), 'Exporter une sauvegarde'),
         h('button', { class: 'btn', type: 'button', onclick: () => fileInput.click() }, icon('upload'), 'Restaurer une sauvegarde')),
       fileInput),
+    h('section', { class: 'section' },
+      h('div', { class: 'section-head' }, h('h3', null, 'Annonce d’exemple')),
+      h('p', { class: 'small' }, 'Une villa fictive avec photos par pièce, pour découvrir l’application.'),
+      h('button', { class: 'btn', type: 'button', onclick: onDemo }, icon('home'), 'Ajouter / réinitialiser l’exemple')),
     h('p', { class: 'muted small meta' }, "Port'Immo · version 0.1")));
 
   async function onExport() {
@@ -70,6 +75,18 @@ export async function renderSettings(view) {
       if (e.name === 'AbortError') { toast('Export annulé'); return; }
       console.error(e);
       toast('Erreur lors de l’export');
+    }
+  }
+
+  async function onDemo() {
+    toast('Chargement de l’exemple…', 0);
+    try {
+      await loadDemo();
+      toast('Annonce d’exemple ajoutée');
+      location.hash = '#/bien/exemple-villa';
+    } catch (e) {
+      console.error(e);
+      toast('Impossible de charger l’exemple (connexion ?)');
     }
   }
 

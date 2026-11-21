@@ -3,6 +3,7 @@ import { renderList } from './views/list.js';
 import { renderDetail } from './views/detail.js';
 import { renderForm } from './views/form.js';
 import { renderSettings } from './views/settings.js';
+import { loadDemoOnFirstLaunch } from './demo.js';
 
 const view = document.getElementById('view');
 const topbar = document.getElementById('topbar');
@@ -63,6 +64,13 @@ export function isCurrent(token) { return token === renderToken; }
 window.addEventListener('hashchange', router);
 hydrateIcons();
 router();
+
+// Premier lancement : ajoute l'annonce d'exemple puis rafraîchit l'écran.
+loadDemoOnFirstLaunch().then((loaded) => {
+  if (!loaded) return;
+  toast("Une annonce d'exemple a été ajoutée");
+  if (['', '#', '#/'].includes(location.hash)) router(); // ne pas interrompre une saisie en cours
+});
 
 // ---------- Service worker (fonctionnement hors-ligne + installation) ----------
 if ('serviceWorker' in navigator) {
