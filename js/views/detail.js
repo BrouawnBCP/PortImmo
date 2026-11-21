@@ -123,14 +123,55 @@ export async function renderDetail(view, id, token) {
     return photos.find((p) => p.id === bien.coverPhotoId) || orderedPhotos()[0] || null;
   }
 
+  /** Photo principale + carrousel : on fait glisser le doigt pour passer d'une photo à l'autre. */
   function renderHero() {
     const cover = coverPhoto();
     if (cover) {
-      const all = orderedPhotos();
+      const list = [cover, ...orderedPhotos().filter((p) => p !== cover)];
+      const pieceOf = (p) => bien.pieces.find((x) => x.id === p.pieceId)?.nom || '';
       hero.classList.remove('hero-empty');
-      fill(hero,
-        h('img', { src: blobUrl(cover.blob), alt: '', onclick: () => openViewer(all, all.indexOf(cover)) }),
-        h('span', { class: 'photo-count' }, icon('camera'), String(photos.length)));
+
+      const slides = list.map((p, i) => h('div', { class: 'hero-slide' },
+        h('img', { src: blobUrl(p.blob), alt: pieceOf(p), loading: i < 2 ? 'eager' : 'lazy', draggable: 'false' })));
+      const track = h('div', { class: 'hero-track' }, slides);
+      const counter = h('span', { class: 'photo-count' }, icon('camera'), h('span', null, `1 / ${list.length}`));
+      const label = h('span', { class: 'hero-piece' }, pieceOf(list[0]));
+      const dots = list.length > 1 && list.length <= 12
+        ? h('div', { class: 'hero-dots' }, list.map((_, i) => h('span', { class: 'hero-dot' + (i === 0 ? ' on' : '') })))
+        : null;
+      const arrow = (dir) => h('button', {
+        class: `hero-arrow hero-${dir < 0 ? 'prev' : 'next'}`, type: 'button', 'aria-label': dir < 0 ? 'Photo précédente' : 'Photo suivante',
+        onclick: (e) => { e.stopPropagation(); track.scrollBy({ left: dir * track.clientWidth, behavior: 'smooth' }); },
+      }, icon(dir < 0 ? 'left' : 'right'));
+
+      let current = 0;
+      let raf = 0;
+      const update = () => {
+        raf = 0;
+        const w = track.clientWidth || 1;
+        const pos = track.scrollLeft / w;
+        // Effet de profondeur : l'image glisse un peu moins vite que le cadre
+        const i0 = Math.floor(pos);
+        for (const k of [i0 - 1, i0, i0 + 1, i0 + 2]) {
+          const img = slides[k] && slides[k].firstChild;
+          if (img) img.style.transform = `translate3d(${(pos - k) * 18}%, 0, 0) scale(1.06)`;
+        }
+        const idx = Math.min(list.length - 1, Math.max(0, Math.round(pos)));
+        if (idx !== current) {
+          current = idx;
+          counter.lastChild.textContent = `${idx + 1} / ${list.length}`;
+          label.textContent = pieceOf(list[idx]);
+          label.classList.remove('pop');
+          void label.offsetWidth; // relance l'animation du libellé
+          label.classList.add('pop');
+          if (dots) dots.childNodes.forEach((d, k) => d.classList.toggle('on', k === idx));
+        }
+      };
+      track.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(update); }, { passive: true });
+      track.addEventListener('click', () => openViewer(list, current));
+
+      fill(hero, track, list.length > 1 ? [arrow(-1), arrow(1)] : null, label, counter, dots);
+      requestAnimationFrame(update);
     } else {
       hero.classList.add('hero-empty');
       fill(hero, h('button', { class: 'hero-add', type: 'button', onclick: () => choosePieceThenPhotos() },

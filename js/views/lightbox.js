@@ -96,6 +96,10 @@ export function openLightbox({ photos, index = 0, pieceName, isCover, ...handler
     if (list.length < 2 || busy) return;
     i = (i + d + list.length) % list.length;
     update();
+    // Glissement doux de la nouvelle photo dans le sens du geste
+    img.classList.remove('lb-from-left', 'lb-from-right');
+    void img.offsetWidth;
+    img.classList.add(d > 0 ? 'lb-from-right' : 'lb-from-left');
   }
 
   function onKey(e) {
