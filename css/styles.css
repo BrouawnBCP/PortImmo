@@ -541,6 +541,14 @@ select.input { appearance: none; padding-right: 32px;
 @media (min-width: 640px) { .head-actions { grid-template-columns: 2fr 1fr 1fr; } .head-actions .head-share { grid-column: auto; } }
 .btn-vendeur { background: var(--accent-soft); border-color: var(--accent); color: #8a6326; }
 @media (prefers-color-scheme: dark) { .btn-vendeur { color: var(--accent); } }
+.badge-vendeur {
+  gap: 3px; max-width: 46%; background: var(--accent-soft); color: #8a6326;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex;
+}
+.badge-vendeur .icon { width: 12px; height: 12px; flex: none; }
+@media (prefers-color-scheme: dark) { .badge-vendeur { color: var(--accent); } }
+.vendeur-filter { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.vendeur-filter .input { flex: 1; min-width: 0; }
 .btn-link-vendeur { border-style: dashed; color: var(--primary); }
 .list-meta-right { display: flex; align-items: center; gap: 8px; }
 .with-icon { display: flex; align-items: center; gap: 8px; }

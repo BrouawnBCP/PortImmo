@@ -19,10 +19,11 @@ const TRIS = [
   { id: 'prix-desc', label: 'Prix décroissant', fn: (a, b) => (Number(b.prix) || 0) - (Number(a.prix) || 0) },
   { id: 'surface', label: 'Surface', fn: (a, b) => (Number(b.surfaceHabitable) || 0) - (Number(a.surfaceHabitable) || 0) },
   { id: 'ville', label: 'Ville (A→Z)', fn: (a, b) => (a.ville || '').localeCompare(b.ville || '', 'fr') },
+  { id: 'vendeur', label: 'Vendeur (A→Z)', fn: null }, // tri calculé avec les fiches contact (voir refresh)
 ];
 
 // L'état des filtres est conservé pendant la session.
-const state = { q: '', filtre: 'actifs', tri: 'recent' };
+const state = { q: '', filtre: 'actifs', tri: 'recent', vendeur: '' };
 
 export function statutInfo(value) {
   return STATUTS.find((s) => s.value === value) || STATUTS[0];
@@ -34,15 +35,39 @@ export async function renderList(view) {
   setTopbar({ title: 'Mes Biens' });
   const [biens, contacts] = await Promise.all([listBiens(), listAcquereurs()]);
   const contactById = Object.fromEntries(contacts.map((c) => [c.id, c]));
-  const vendeurName = (b) => (b.vendeurId && contactById[b.vendeurId]
-    ? [contactById[b.vendeurId].prenom, contactById[b.vendeurId].nom].filter(Boolean).join(' ')
-    : b.proprioNom || '');
+  const vendeurOf = (b) => (b.vendeurId && contactById[b.vendeurId]) || null;
+  const vendeurName = (b) => {
+    const v = vendeurOf(b);
+    return v ? [v.prenom, v.nom].filter(Boolean).join(' ') : b.proprioNom || '';
+  };
+  /** Nom de famille (ou prénom à défaut) pour le badge et le tri. */
+  const vendeurLast = (b) => {
+    const v = vendeurOf(b);
+    return v ? (v.nom || v.prenom || '') : '';
+  };
 
   const results = h('div', { class: 'cards' });
   const count = h('div', { class: 'list-count muted' });
 
+  // Filtre par vendeur (affiché seulement s'il existe des biens liés à un vendeur)
+  const vendeurIds = [...new Set(biens.map((b) => b.vendeurId).filter((id) => id && contactById[id]))];
+  if (state.vendeur && state.vendeur !== '__none' && !vendeurIds.includes(state.vendeur)) state.vendeur = '';
+  const vendeurFilter = vendeurIds.length ? h('label', { class: 'vendeur-filter' },
+    icon('user'),
+    h('select', {
+      class: 'input select-sm', 'aria-label': 'Filtrer par vendeur',
+      onchange: (e) => { state.vendeur = e.target.value; refresh(); },
+      value: state.vendeur,
+    },
+    h('option', { value: '' }, 'Tous les vendeurs'),
+    vendeurIds
+      .map((id) => contactById[id])
+      .sort((a, b) => (a.nom || a.prenom || '').localeCompare(b.nom || b.prenom || '', 'fr'))
+      .map((c) => h('option', { value: c.id }, `${[c.nom, c.prenom].filter(Boolean).join(' ')} (${biens.filter((b) => b.vendeurId === c.id).length})`)),
+    h('option', { value: '__none' }, 'Sans vendeur lié'))) : null;
+
   const search = h('input', {
-    class: 'input search-input', type: 'search', placeholder: 'Rechercher (titre, ville, réf…)', value: state.q,
+    class: 'input search-input', type: 'search', placeholder: 'Rechercher (titre, ville, réf., vendeur…)', value: state.q,
     oninput: (e) => { state.q = e.target.value; refresh(); },
   });
   const chips = h('div', { class: 'chips chips-scroll' }, FILTRES.map((f) =>
@@ -64,6 +89,7 @@ export async function renderList(view) {
     h('div', { class: 'list-toolbar' },
       h('div', { class: 'search' }, icon('search'), search),
       chips,
+      vendeurFilter,
       h('div', { class: 'list-meta' }, count, h('div', { class: 'list-meta-right' },
         h('a', { class: 'btn btn-sm', href: '#/carte' }, icon('map'), 'Carte'),
         sort))),
@@ -77,7 +103,11 @@ export async function renderList(view) {
     const list = biens
       .filter(filtre.test)
       .filter((b) => !q || norm([b.titre, b.ville, b.codePostal, b.reference, b.adresse, b.quartier, b.typeBien, vendeurName(b)].join(' ')).includes(q))
-      .sort((TRIS.find((t) => t.id === state.tri) || TRIS[0]).fn);
+      .filter((b) => !state.vendeur || (state.vendeur === '__none' ? !vendeurOf(b) : b.vendeurId === state.vendeur))
+      .sort(state.tri === 'vendeur'
+        // Biens sans vendeur à la fin
+        ? (a, b) => (vendeurLast(a) ? 0 : 1) - (vendeurLast(b) ? 0 : 1) || vendeurLast(a).localeCompare(vendeurLast(b), 'fr')
+        : (TRIS.find((t) => t.id === state.tri) || TRIS[0]).fn);
 
     results.replaceChildren();
     count.textContent = `${list.length} bien${list.length > 1 ? 's' : ''}`;
@@ -94,13 +124,13 @@ export async function renderList(view) {
       results.append(h('div', { class: 'empty' }, h('p', { class: 'muted' }, 'Aucun bien ne correspond à la recherche.')));
       return;
     }
-    list.forEach((b) => results.append(card(b)));
+    list.forEach((b) => results.append(card(b, vendeurLast(b))));
   }
 
   refresh();
 }
 
-function card(b) {
+function card(b, vendeur = '') {
   const st = statutInfo(b.statut);
   const cover = h('div', { class: 'card-cover' }, icon('image', 'icon-placeholder'));
   const photoCount = h('span', { class: 'photo-count', hidden: true });
@@ -132,6 +162,7 @@ function card(b) {
       h('div', { class: 'card-top' },
         h('span', { class: `badge badge-${st.color}` }, st.label),
         b.transaction ? h('span', { class: 'badge badge-outline' }, b.transaction) : null,
+        vendeur ? h('span', { class: 'badge badge-vendeur', title: 'Vendeur' }, icon('user'), vendeur) : null,
         b.reference ? h('span', { class: 'card-ref muted' }, b.reference) : null),
       h('div', { class: 'card-title' }, b.titre || 'Sans titre'),
       h('div', { class: 'card-price' }, fmtPrice(b.prix) + (b.prix && b.transaction === 'Location' ? ' /mois' : '')),
