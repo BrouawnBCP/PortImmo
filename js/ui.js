@@ -161,8 +161,24 @@ export async function shareOrDownload(file, { title = '', text = '' } = {}) {
 
 // ---------- Toast ----------
 let toastTimer;
+
+/** Message avec un bouton d'action (ex. « Annuler »), visible quelques secondes. */
+export function toastAction(msg, label, onAction, ms = 5000) {
+  const el = document.getElementById('toast');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'toast-action';
+  btn.textContent = label;
+  btn.addEventListener('click', () => { el.classList.remove('show', 'with-action'); clearTimeout(toastTimer); onAction(); });
+  el.replaceChildren(document.createTextNode(msg), btn);
+  el.classList.add('show', 'with-action');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show', 'with-action'), ms);
+}
+
 export function toast(msg, ms = 2600) {
   const el = document.getElementById('toast');
+  el.classList.remove('with-action');
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(toastTimer);

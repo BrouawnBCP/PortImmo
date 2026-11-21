@@ -549,6 +549,12 @@ select.input { appearance: none; padding-right: 32px;
 @media (prefers-color-scheme: dark) { .badge-vendeur { color: var(--accent); } }
 .vendeur-filter { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .vendeur-filter .input { flex: 1; min-width: 0; }
+.trash-btn { flex: none; align-self: center; color: var(--danger); width: 40px; height: 40px; }
+.trash-btn:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.match { transition: opacity .25s ease, transform .25s ease; }
+.match.row-out { opacity: 0; transform: translateX(-24px); }
+.toast.with-action { display: flex; align-items: center; gap: 14px; pointer-events: auto; text-align: left; }
+.toast-action { flex: none; border: 0; background: transparent; color: var(--accent); font: inherit; font-weight: 800; cursor: pointer; padding: 4px 2px; }
 .btn-link-vendeur { border-style: dashed; color: var(--primary); }
 .list-meta-right { display: flex; align-items: center; gap: 8px; }
 .with-icon { display: flex; align-items: center; gap: 8px; }

@@ -2,7 +2,7 @@
 // - Acquéreur : critères de recherche + biens correspondants (rapprochement automatique).
 // - Vendeur : biens qui lui appartiennent (liés depuis le formulaire du bien).
 // Stockage : magasin « acquereurs » (nom historique), champ roles = ['acquereur'] / ['vendeur'] / les deux.
-import { h, fill, icon, toast, confirmDialog, actionSheet, blobUrl, fmtPrice, fmtNum, fmtDate, pickFiles } from '../ui.js';
+import { h, fill, icon, toast, toastAction, confirmDialog, actionSheet, blobUrl, fmtPrice, fmtNum, fmtDate, pickFiles } from '../ui.js';
 import { canPickContacts, pickContact, parseVcard } from '../contacts.js';
 import { listAcquereurs, getAcquereur, saveAcquereur, deleteAcquereur, listBiens, listEvents, getCoverThumb, putBienSilently } from '../db.js';
 import { TYPES_BIEN, SECTIONS } from '../config.js';
@@ -175,7 +175,20 @@ export async function renderContact(view, id, token) {
         h('h3', null, `Biens du vendeur (${owned.length})`),
         h('a', { class: 'btn btn-sm', href: `#/bien/nouveau/vendeur/${encodeURIComponent(id)}` }, icon('plus'), 'Bien')),
       owned.length
-        ? h('div', { class: 'matches' }, owned.map((b) => bienRow(b)))
+        ? h('div', { class: 'matches' }, owned.map((b) => bienRow(b, null, async (row) => {
+          // Retire le lien vendeur (le bien est conservé), avec possibilité d'annuler
+          delete b.vendeurId;
+          await putBienSilently(b);
+          row.classList.add('row-out');
+          const head = row.closest('section')?.querySelector('h3');
+          if (head) head.textContent = head.textContent.replace(/\((\d+)\)/, (_, n) => `(${Math.max(0, n - 1)})`);
+          setTimeout(() => row.remove(), 250);
+          toastAction(`« ${b.titre || 'Bien'} » retiré de la fiche`, 'Annuler', async () => {
+            b.vendeurId = id;
+            await putBienSilently(b);
+            window.dispatchEvent(new HashChangeEvent('hashchange'));
+          });
+        })))
         : h('p', { class: 'muted small' }, 'Aucun bien lié. Ajoutez un bien depuis ce bouton, ou choisissez ce vendeur dans le formulaire d’un bien existant.')));
   }
 
@@ -234,12 +247,12 @@ export async function renderContact(view, id, token) {
     h('p', { class: 'muted small meta' }, `Créé le ${fmtDate(c.createdAt)} · modifié le ${fmtDate(c.updatedAt)}`)));
 }
 
-/** Ligne « bien » avec miniature (et raisons du rapprochement si fournies). */
-function bienRow(b, m = null) {
+/** Ligne « bien » avec miniature (et raisons du rapprochement si fournies). onRemove : bouton poubelle. */
+function bienRow(b, m = null, onRemove = null) {
   const st = statutInfo(b.statut);
   const thumb = h('span', { class: 'match-thumb' }, icon('image'));
   getCoverThumb(b).then((blob) => { if (blob) thumb.replaceChildren(h('img', { src: blobUrl(blob), alt: '' })); });
-  return h('a', { class: 'match', href: `#/bien/${encodeURIComponent(b.id)}` },
+  const row = h('a', { class: 'match', href: `#/bien/${encodeURIComponent(b.id)}` },
     thumb,
     h('span', { class: 'match-body' },
       h('span', { class: 'match-title' }, b.titre || 'Sans titre'),
@@ -248,7 +261,12 @@ function bienRow(b, m = null) {
         m.plus.slice(0, 3).map((p) => h('span', { class: 'reason ok' }, '✓ ' + p)),
         m.moins.slice(0, 3).map((p) => h('span', { class: 'reason ko' }, '✗ ' + p))) : null,
       h('span', null, h('span', { class: `badge badge-${st.color}` }, st.label))),
-    m ? h('span', { class: 'score ' + (m.score >= 80 ? 'high' : m.score >= 50 ? 'mid' : 'low') }, `${m.score} %`) : null);
+    m ? h('span', { class: 'score ' + (m.score >= 80 ? 'high' : m.score >= 50 ? 'mid' : 'low') }, `${m.score} %`) : null,
+    onRemove ? h('button', {
+      class: 'icon-btn trash-btn', type: 'button', 'aria-label': 'Retirer ce bien de la fiche', title: 'Retirer ce bien de la fiche',
+      onclick: (e) => { e.preventDefault(); e.stopPropagation(); onRemove(row); },
+    }, icon('trash')) : null);
+  return row;
 }
 
 // ---------------------------------------------------------------------------
