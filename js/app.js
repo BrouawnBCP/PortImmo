@@ -21,12 +21,14 @@ export function setTopbar({ title = "Port'Immo", back = null, actions = [] } = {
   topbar.append(right);
 }
 
+// Chaque écran est rendu dans un conteneur neuf : si l'utilisateur change d'écran
+// pendant un chargement, l'ancien rendu s'écrit dans un conteneur détaché (invisible).
 const routes = [
-  { re: /^\/?$/, tab: 'biens', render: () => renderList(view) },
-  { re: /^\/bien\/nouveau$/, tab: 'biens', render: () => renderForm(view, null) },
-  { re: /^\/bien\/([^/]+)\/modifier$/, tab: 'biens', render: (m) => renderForm(view, m[1]) },
-  { re: /^\/bien\/([^/]+)$/, tab: 'biens', render: (m, t) => renderDetail(view, m[1], t) },
-  { re: /^\/reglages$/, tab: 'reglages', render: () => renderSettings(view) },
+  { re: /^\/?$/, tab: 'biens', render: (m, t, c) => renderList(c) },
+  { re: /^\/bien\/nouveau$/, tab: 'biens', render: (m, t, c) => renderForm(c, null) },
+  { re: /^\/bien\/([^/]+)\/modifier$/, tab: 'biens', render: (m, t, c) => renderForm(c, m[1]) },
+  { re: /^\/bien\/([^/]+)$/, tab: 'biens', render: (m, t, c) => renderDetail(c, m[1], t) },
+  { re: /^\/reglages$/, tab: 'reglages', render: (m, t, c) => renderSettings(c) },
 ];
 
 let renderToken = 0;
@@ -36,18 +38,19 @@ export async function router() {
   releaseBlobUrls();
   document.querySelectorAll('.overlay, .lightbox').forEach((el) => el.remove());
   document.body.classList.remove('no-scroll');
-  clear(view);
+  const container = document.createElement('div');
+  view.replaceChildren(container);
   window.scrollTo(0, 0);
   for (const r of routes) {
     const m = path.match(r.re);
     if (!m) continue;
     tabbar.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === r.tab));
     try {
-      await r.render(m, token);
+      await r.render(m, token, container);
     } catch (err) {
       console.error(err);
       if (token === renderToken) {
-        view.append(h('div', { class: 'empty' }, h('p', null, 'Une erreur est survenue.'), h('p', { class: 'muted' }, String(err.message || err))));
+        container.append(h('div', { class: 'empty' }, h('p', null, 'Une erreur est survenue.'), h('p', { class: 'muted' }, String(err.message || err))));
       }
     }
     return;

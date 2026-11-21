@@ -1,7 +1,7 @@
 // Service worker : permet à l'application de fonctionner hors-ligne.
 // Stratégie « réseau d'abord » : toujours la dernière version si connecté,
 // la copie en cache sinon. Incrémenter VERSION à chaque mise en ligne.
-const VERSION = 'portimmo-v1';
+const VERSION = 'portimmo-v2';
 const SHELL = [
   './',
   'index.html',
@@ -39,7 +39,8 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   e.respondWith(
-    fetch(req)
+    // cache: 'no-cache' -> revalide auprès du serveur pour toujours avoir la dernière version
+    fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();
