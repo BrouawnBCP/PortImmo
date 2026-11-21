@@ -1,5 +1,5 @@
 import { h, fill, icon, blobUrl, fmtPrice, fmtNum, fmtDate, toast, actionSheet, confirmDialog, promptDialog, pickImages } from '../ui.js';
-import { getBien, saveBien, deleteBien, listPhotos, putPhoto, deletePhoto, deletePhotosOfPiece, reorderPhotos, saveEvent, uid } from '../db.js';
+import { listAcquereurs, getBien, saveBien, deleteBien, listPhotos, putPhoto, deletePhoto, deletePhotosOfPiece, reorderPhotos, saveEvent, uid } from '../db.js';
 import { SECTIONS, PIECES_SUGGEREES } from '../config.js';
 import { processImage, rotateImage, cropImage } from '../images.js';
 import { setTopbar, isCurrent } from '../app.js';
@@ -8,7 +8,7 @@ import { openLightbox } from './lightbox.js';
 import { openCropper } from './cropper.js';
 import { renderJournal } from './journal.js';
 import { renderDocs } from './docs.js';
-import { renderAcquereursPourBien } from './acquereurs.js';
+import { renderAcquereursPourBien, vendeurCard } from './contacts.js';
 import { formDialog } from '../dialogs.js';
 import { formatValue, isEmpty } from '../format.js';
 import { openShareMenu } from './share.js';
@@ -28,6 +28,7 @@ export async function renderDetail(view, id, token) {
   let bien = await getBien(id);
   if (!bien) { toast('Bien introuvable'); location.hash = '#/biens'; return; }
   let photos = await listPhotos(id);
+  let contacts = await listAcquereurs();
   if (!isCurrent(token)) return;
 
   const topbar = () => setTopbar({
@@ -69,6 +70,7 @@ export async function renderDetail(view, id, token) {
 
   async function refreshAll() {
     bien = await getBien(id);
+    contacts = await listAcquereurs();
     topbar();
     fill(headWrap, header());
     renderHero();
@@ -381,8 +383,15 @@ export async function renderDetail(view, id, token) {
     const wrap = h('div');
     for (const s of SECTIONS) {
       const rows = s.fields.filter((f) => !isEmpty(bien[f.key]) && !['titre'].includes(f.key));
-      if (!rows.length) continue;
+      const isVendeurSection = s.id === 'proprietaire';
+      if (!rows.length && !isVendeurSection) continue;
       const body = h('div', { class: 'info-grid' });
+      if (isVendeurSection) {
+        const card = vendeurCard(bien, contacts);
+        body.append(h('div', { class: 'info full' }, card || h('p', { class: 'muted small', style: { margin: 0 } },
+          'Aucun vendeur lié. ',
+          h('a', { href: `#/bien/${encodeURIComponent(id)}/modifier` }, 'Choisir ou créer le vendeur'))));
+      }
       for (const f of rows) {
         const v = bien[f.key];
         if (f.type === 'chips') {

@@ -5,7 +5,8 @@ import { renderForm } from './views/form.js';
 import { renderSettings } from './views/settings.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderCarte } from './views/carte.js';
-import { renderAcquereurs, renderAcquereur, renderAcquereurForm } from './views/acquereurs.js';
+import { renderContacts, renderContact, renderContactForm, migrateVendeurs } from './views/contacts.js';
+import { getMeta, setMeta } from './db.js';
 import { renderSimulateur } from './views/simulateur.js';
 import { loadDemoOnFirstLaunch } from './demo.js';
 
@@ -33,12 +34,13 @@ const routes = [
   { re: /^\/biens$/, tab: 'biens', render: (m, t, c) => renderList(c) },
   { re: /^\/carte$/, tab: 'biens', render: (m, t, c) => renderCarte(c, t) },
   { re: /^\/bien\/nouveau$/, tab: 'biens', render: (m, t, c) => renderForm(c, null) },
+  { re: /^\/bien\/nouveau\/vendeur\/([^/]+)$/, tab: 'biens', render: (m, t, c) => renderForm(c, null, { vendeurId: m[1] }) },
   { re: /^\/bien\/([^/]+)\/modifier$/, tab: 'biens', render: (m, t, c) => renderForm(c, m[1]) },
   { re: /^\/bien\/([^/]+)$/, tab: 'biens', render: (m, t, c) => renderDetail(c, m[1], t) },
-  { re: /^\/acquereurs$/, tab: 'acquereurs', render: (m, t, c) => renderAcquereurs(c) },
-  { re: /^\/acquereur\/nouveau$/, tab: 'acquereurs', render: (m, t, c) => renderAcquereurForm(c, null) },
-  { re: /^\/acquereur\/([^/]+)\/modifier$/, tab: 'acquereurs', render: (m, t, c) => renderAcquereurForm(c, m[1]) },
-  { re: /^\/acquereur\/([^/]+)$/, tab: 'acquereurs', render: (m, t, c) => renderAcquereur(c, m[1], t) },
+  { re: /^\/(?:contacts|acquereurs)$/, tab: 'contacts', render: (m, t, c) => renderContacts(c) },
+  { re: /^\/(?:contact|acquereur)\/nouveau(?:\/(acquereur|vendeur))?$/, tab: 'contacts', render: (m, t, c) => renderContactForm(c, null, m[1] || null) },
+  { re: /^\/(?:contact|acquereur)\/([^/]+)\/modifier$/, tab: 'contacts', render: (m, t, c) => renderContactForm(c, m[1]) },
+  { re: /^\/(?:contact|acquereur)\/([^/]+)$/, tab: 'contacts', render: (m, t, c) => renderContact(c, m[1], t) },
   { re: /^\/simulateur(?:\/([^/]+))?$/, tab: 'simulateur', render: (m, t, c) => renderSimulateur(c, m[1] || null) },
   { re: /^\/reglages$/, tab: 'reglages', render: (m, t, c) => renderSettings(c) },
 ];
@@ -75,6 +77,16 @@ export function isCurrent(token) { return token === renderToken; }
 window.addEventListener('hashchange', router);
 hydrateIcons();
 router();
+
+// Migration unique : anciens « propriétaires » des biens -> fiches Contact vendeur.
+(async () => {
+  try {
+    if (await getMeta('migration-vendeurs')) return;
+    const n = await migrateVendeurs();
+    await setMeta('migration-vendeurs', new Date().toISOString());
+    if (n) { toast(`${n} fiche${n > 1 ? 's' : ''} vendeur créée${n > 1 ? 's' : ''} à partir des propriétaires`); router(); }
+  } catch (e) { console.warn('Migration vendeurs', e); }
+})();
 
 // Premier lancement : ajoute l'annonce d'exemple puis rafraîchit l'écran.
 loadDemoOnFirstLaunch().then((loaded) => {

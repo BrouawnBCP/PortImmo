@@ -1,7 +1,7 @@
 // Service worker : permet à l'application de fonctionner hors-ligne.
 // Stratégie « réseau d'abord » : toujours la dernière version si connecté,
 // la copie en cache sinon. Incrémenter VERSION à chaque mise en ligne.
-const VERSION = 'portimmo-v9';
+const VERSION = 'portimmo-v10';
 const SHELL = [
   './',
   'index.html',
@@ -16,7 +16,7 @@ const SHELL = [
   'js/matching.js',
   'js/minifiche.js',
   'js/pdf/vitrine.js',
-  'js/views/acquereurs.js',
+  'js/views/contacts.js',
   'js/views/carte.js',
   'js/views/dashboard.js',
   'js/views/simulateur.js',

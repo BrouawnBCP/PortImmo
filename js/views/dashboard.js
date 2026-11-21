@@ -5,7 +5,7 @@ import { setTopbar } from '../app.js';
 import { getAgence } from '../agence.js';
 import { backupReminder } from '../backup.js';
 import { eventTitle, enRetard, rappelActions, editRappel, editVisite } from './journal.js';
-import { acquereursPour } from '../matching.js';
+import { acquereursPour, isAcquereur } from '../matching.js';
 
 const DAY = 86400e3;
 const refresh = () => window.dispatchEvent(new HashChangeEvent('hashchange'));
@@ -152,7 +152,8 @@ export async function renderDashboard(view) {
       actionSheet('Visite de quel bien ?', actifs.map((b) => ({ label: b.titre || 'Sans titre', onClick: async () => { if (await editVisite(b)) refresh(); } })));
     } },
     { icon: 'building', label: 'Nouveau bien', onClick: () => { location.hash = '#/bien/nouveau'; } },
-    { icon: 'user', label: 'Nouvel acquéreur', onClick: () => { location.hash = '#/acquereur/nouveau'; } },
+    { icon: 'search', label: 'Nouvel acquéreur', onClick: () => { location.hash = '#/contact/nouveau/acquereur'; } },
+    { icon: 'user', label: 'Nouveau vendeur', onClick: () => { location.hash = '#/contact/nouveau/vendeur'; } },
   ]);
 
   view.append(h('div', { class: 'dash' },
@@ -163,7 +164,7 @@ export async function renderDashboard(view) {
     h('div', { class: 'stats' },
       stat(count('disponible'), 'Disponibles', '#/biens', 's-blue'),
       stat(count('option'), 'Sous offre', '#/biens', 's-terra'),
-      stat(acqs.filter((a) => a.statut !== 'inactif').length, 'Acquéreurs', '#/acquereurs', 's-gold')),
+      stat(acqs.filter((a) => a.statut !== 'inactif' && isAcquereur(a)).length, 'Acquéreurs', '#/contacts', 's-gold')),
     banner,
     todo.length ? h('section', { class: 'dash-block' },
       h('h3', { class: 'dash-title' }, 'À traiter ', h('span', { class: 'count-pill' }, String(todo.length))),

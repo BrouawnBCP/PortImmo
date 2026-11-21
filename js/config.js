@@ -112,12 +112,10 @@ export const SECTIONS = [
   },
   {
     id: 'proprietaire',
-    title: 'Propriétaire & notes',
+    title: 'Vendeur & notes privées',
     private: true,
     fields: [
-      { key: 'proprioNom', label: 'Nom du propriétaire', type: 'text', full: true },
-      { key: 'proprioTel', label: 'Téléphone', type: 'tel' },
-      { key: 'proprioEmail', label: 'E-mail', type: 'email' },
+      // Le vendeur est une fiche « Contact » liée au bien (choisie en haut de cette section).
       { key: 'notes', label: 'Notes privées', type: 'textarea', full: true, rows: 4 },
     ],
   },

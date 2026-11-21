@@ -171,7 +171,7 @@ export async function renderSettings(view) {
     try {
       const data = JSON.parse(await file.text());
       const r = await importAll(data);
-      toast(`${r.biens} biens, ${r.photos} photos et ${r.acquereurs} acquéreurs restaurés`);
+      toast(`${r.biens} biens, ${r.photos} photos et ${r.acquereurs} contacts restaurés`);
       location.hash = '#/biens';
     } catch (e) {
       console.error(e);

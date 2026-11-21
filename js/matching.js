@@ -6,6 +6,11 @@ import { fmtPrice, fmtNum } from './ui.js';
 const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[-']/g, ' ').trim();
 const MARGE_BUDGET = 0.05;
 
+// Un contact peut être acquéreur, vendeur ou les deux (anciennes fiches sans rôle = acquéreur).
+export const rolesOf = (c) => (Array.isArray(c.roles) && c.roles.length ? c.roles : ['acquereur']);
+export const isAcquereur = (c) => rolesOf(c).includes('acquereur');
+export const isVendeur = (c) => rolesOf(c).includes('vendeur');
+
 export const villesList = (acq) => String(acq.villes || '').split(/[,;\n]/).map(norm).filter(Boolean);
 
 /**
@@ -15,6 +20,7 @@ export function matchBien(bien, acq) {
   const plus = [];
   const moins = [];
 
+  if (!isAcquereur(acq)) return { ok: false, score: 0, plus, moins: ['Pas acquéreur'] };
   if (acq.statut === 'inactif') return { ok: false, score: 0, plus, moins: ['Acquéreur inactif'] };
   if (bien.statut === 'vendu' || bien.statut === 'archive') return { ok: false, score: 0, plus, moins: ['Bien plus disponible'] };
   if (acq.transaction && bien.transaction && acq.transaction !== bien.transaction) {

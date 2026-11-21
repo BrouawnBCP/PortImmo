@@ -1,5 +1,5 @@
 import { h, icon, blobUrl, fmtPrice, fmtNum } from '../ui.js';
-import { listBiens, getCoverThumb, countPhotos } from '../db.js';
+import { listBiens, getCoverThumb, countPhotos, listAcquereurs } from '../db.js';
 import { STATUTS } from '../config.js';
 import { setTopbar } from '../app.js';
 import { backupReminder } from '../backup.js';
@@ -32,7 +32,11 @@ const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-
 
 export async function renderList(view) {
   setTopbar({ title: 'Mes Biens' });
-  const biens = await listBiens();
+  const [biens, contacts] = await Promise.all([listBiens(), listAcquereurs()]);
+  const contactById = Object.fromEntries(contacts.map((c) => [c.id, c]));
+  const vendeurName = (b) => (b.vendeurId && contactById[b.vendeurId]
+    ? [contactById[b.vendeurId].prenom, contactById[b.vendeurId].nom].filter(Boolean).join(' ')
+    : b.proprioNom || '');
 
   const results = h('div', { class: 'cards' });
   const count = h('div', { class: 'list-count muted' });
@@ -72,7 +76,7 @@ export async function renderList(view) {
     const q = norm(state.q).trim();
     const list = biens
       .filter(filtre.test)
-      .filter((b) => !q || norm([b.titre, b.ville, b.codePostal, b.reference, b.adresse, b.quartier, b.typeBien, b.proprioNom].join(' ')).includes(q))
+      .filter((b) => !q || norm([b.titre, b.ville, b.codePostal, b.reference, b.adresse, b.quartier, b.typeBien, vendeurName(b)].join(' ')).includes(q))
       .sort((TRIS.find((t) => t.id === state.tri) || TRIS[0]).fn);
 
     results.replaceChildren();

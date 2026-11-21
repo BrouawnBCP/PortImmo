@@ -1,5 +1,8 @@
 import { h, icon, toast, confirmDialog } from '../ui.js';
-import { getBien, saveBien, saveEvent } from '../db.js';
+import { getBien, saveBien, saveEvent, listAcquereurs } from '../db.js';
+import { isVendeur } from '../matching.js';
+import { acqName } from './journal.js';
+import { quickCreateVendeur } from './contacts.js';
 import { SECTIONS } from '../config.js';
 import { setTopbar } from '../app.js';
 import { formDialog } from '../dialogs.js';
@@ -47,20 +50,45 @@ function customFieldRow(cf = { label: '', value: '' }) {
   return row;
 }
 
-export async function renderForm(view, id) {
+export async function renderForm(view, id, { vendeurId: presetVendeur = null } = {}) {
   const existing = id ? await getBien(id) : null;
   if (id && !existing) { location.hash = '#/biens'; return; }
-  const bien = existing || {};
-  const backHref = existing ? `#/bien/${encodeURIComponent(id)}` : '#/biens';
+  const bien = existing || (presetVendeur ? { vendeurId: presetVendeur } : {});
+  const backHref = existing ? `#/bien/${encodeURIComponent(id)}` : presetVendeur ? `#/contact/${encodeURIComponent(presetVendeur)}` : '#/biens';
 
   setTopbar({ title: existing ? 'Modifier le bien' : 'Nouveau bien', back: backHref });
 
   const form = h('form', { class: 'form', novalidate: true });
 
+  // ---- Vendeur (fiche Contact liée) ----
+  const contacts = await listAcquereurs();
+  const vendeurSelect = h('select', { class: 'input', id: 'f-vendeur' });
+  const fillVendeurs = (selected) => {
+    const list = contacts
+      .filter((c) => isVendeur(c) || c.id === selected)
+      .sort((a, b) => acqName(a).localeCompare(acqName(b), 'fr'));
+    vendeurSelect.replaceChildren(
+      h('option', { value: '' }, list.length ? '— Aucun vendeur lié —' : '— Aucune fiche vendeur —'),
+      ...list.map((c) => h('option', { value: c.id }, acqName(c) + (c.telephone ? ` · ${c.telephone}` : ''))));
+    vendeurSelect.value = selected || '';
+  };
+  fillVendeurs(bien.vendeurId || '');
+  const vendeurField = h('div', { class: 'field full vendeur-field' },
+    h('label', { for: 'f-vendeur' }, 'Vendeur (propriétaire)'),
+    h('div', { class: 'vendeur-pick' },
+      vendeurSelect,
+      h('button', { class: 'btn btn-sm', type: 'button', onclick: async () => {
+        const v = await quickCreateVendeur();
+        if (!v) return;
+        contacts.push(v);
+        fillVendeurs(v.id);
+      } }, icon('plus'), 'Nouveau vendeur')),
+    h('p', { class: 'small muted field-help' }, 'Le vendeur a sa propre fiche dans Contacts, avec la liste de ses biens.'));
+
   SECTIONS.forEach((s, i) => {
-    form.append(h('details', { class: 'form-section', open: i < 2 || !!existing },
+    form.append(h('details', { class: 'form-section', open: i < 2 || !!existing || (s.id === 'proprietaire' && !!presetVendeur) },
       h('summary', null, s.title, s.private ? h('span', { class: 'badge badge-grey' }, 'Privé') : null),
-      h('div', { class: 'form-grid' }, s.fields.map((f) =>
+      h('div', { class: 'form-grid' }, s.id === 'proprietaire' ? vendeurField : null, s.fields.map((f) =>
         h('div', { class: 'field' + (f.full || f.type === 'textarea' || f.type === 'chips' ? ' full' : '') },
           f.type === 'chips' ? null : h('label', { for: 'f-' + f.key }, f.label, f.required ? ' *' : ''),
           fieldInput(f, bien[f.key]))))));
@@ -104,6 +132,8 @@ export async function renderForm(view, id) {
         data[f.key] = v;
       }
     }
+    if (vendeurSelect.value) data.vendeurId = vendeurSelect.value;
+    else delete data.vendeurId;
     data.champsPerso = [...customList.querySelectorAll('.custom-row')]
       .map((r) => ({ label: r.querySelector('[data-cf=label]').value.trim(), value: r.querySelector('[data-cf=value]').value.trim() }))
       .filter((c) => c.label || c.value);
