@@ -648,6 +648,9 @@ select.input { appearance: none; padding-right: 32px;
 .score.mid { background: var(--orange-bg); color: var(--orange); }
 .score.low { background: var(--grey-bg); color: var(--grey); }
 
+.contact-import { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding: 12px; border-radius: 14px; background: var(--accent-soft); }
+.contact-help { margin: 2px 0 0; width: 100%; }
+
 /* ---------- Simulateur ---------- */
 .with-reset .input { padding-right: 92px; }
 .with-reset .unit { right: 46px; }

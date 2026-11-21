@@ -1,5 +1,6 @@
 // Acquéreurs : liste, fiche (avec biens correspondants) et formulaire.
-import { h, icon, toast, confirmDialog, actionSheet, blobUrl, fmtPrice, fmtNum, fmtDate } from '../ui.js';
+import { h, icon, toast, confirmDialog, actionSheet, blobUrl, fmtPrice, fmtNum, fmtDate, pickFiles } from '../ui.js';
+import { canPickContacts, pickContact, parseVcard } from '../contacts.js';
 import { listAcquereurs, getAcquereur, saveAcquereur, deleteAcquereur, listBiens, listEvents, getCoverThumb } from '../db.js';
 import { TYPES_BIEN, SECTIONS } from '../config.js';
 import { setTopbar, isCurrent } from '../app.js';
@@ -11,10 +12,11 @@ import { statutInfo } from './list.js';
 const EQUIPEMENTS = (SECTIONS.flatMap((s) => s.fields).find((f) => f.key === 'equipements') || { options: [] }).options;
 
 export const ACQ_FIELDS = [
-  { key: 'prenom', label: 'Prénom' },
-  { key: 'nom', label: 'Nom', required: true },
-  { key: 'telephone', label: 'Téléphone', type: 'tel' },
-  { key: 'email', label: 'E-mail', type: 'email' },
+  // « autocomplete » : sur iPhone, Safari propose alors de remplir depuis les Contacts.
+  { key: 'prenom', label: 'Prénom', autocomplete: 'given-name' },
+  { key: 'nom', label: 'Nom', required: true, autocomplete: 'family-name' },
+  { key: 'telephone', label: 'Téléphone', type: 'tel', autocomplete: 'tel' },
+  { key: 'email', label: 'E-mail', type: 'email', autocomplete: 'email' },
   { key: 'statut', label: 'Statut', type: 'select', options: [{ value: 'actif', label: 'Actif (en recherche)' }, { value: 'inactif', label: 'Inactif / a trouvé' }] },
   { key: 'financement', label: 'Financement', type: 'select', options: ['Non renseigné', 'Comptant', 'Prêt accordé', 'Accord de principe', 'Prêt à obtenir', 'Vente préalable nécessaire'] },
 ];
@@ -199,8 +201,39 @@ export async function renderAcquereurForm(view, id) {
   setTopbar({ title: existing ? "Modifier l'acquéreur" : 'Nouvel acquéreur', back });
 
   const all = [...ACQ_FIELDS, ...CRITERES_FIELDS];
+
+  // ---- Remplir depuis les contacts du téléphone ----
+  function applyContact(c) {
+    if (!c) return;
+    let n = 0;
+    for (const k of ['prenom', 'nom', 'telephone', 'email']) {
+      if (c[k]) { form.elements[k].value = c[k]; n++; }
+    }
+    toast(n ? 'Contact importé — vérifiez puis enregistrez' : 'Ce contact est vide');
+  }
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const contactBar = h('div', { class: 'contact-import' },
+    canPickContacts()
+      ? h('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: async () => {
+        try { applyContact(await pickContact()); } catch (e) { console.error(e); toast('Accès aux contacts refusé ou indisponible'); }
+      } }, icon('users'), 'Choisir dans mes contacts')
+      : null,
+    h('button', { class: 'btn btn-sm', type: 'button', onclick: async () => {
+      const [file] = await pickFiles({ accept: '.vcf,text/vcard,text/x-vcard,text/directory' });
+      if (!file) return;
+      const c = parseVcard(await file.text());
+      if (!c) { toast('Fiche contact illisible'); return; }
+      applyContact(c);
+    } }, icon('upload'), 'Importer une fiche contact (.vcf)'),
+    h('p', { class: 'small muted contact-help' },
+      isIos
+        ? 'Astuce iPhone : touchez le champ « Nom » puis « Contacts » au-dessus du clavier pour remplir depuis votre répertoire. Sinon : app Contacts → la personne → « Partager le contact » → « Enregistrer dans Fichiers », puis importez la fiche ici.'
+        : canPickContacts()
+          ? 'Choisissez une personne dans le répertoire du téléphone : nom, téléphone et e-mail seront remplis automatiquement.'
+          : 'Vous pouvez importer une fiche contact (.vcf) exportée depuis votre téléphone ou votre messagerie.'));
+
   const form = h('form', { class: 'form', novalidate: true },
-    h('details', { class: 'form-section', open: true }, h('summary', null, 'Coordonnées'), fieldsGrid(ACQ_FIELDS, acq)),
+    h('details', { class: 'form-section', open: true }, h('summary', null, 'Coordonnées'), contactBar, fieldsGrid(ACQ_FIELDS, acq)),
     h('details', { class: 'form-section', open: true }, h('summary', null, 'Critères de recherche'), fieldsGrid(CRITERES_FIELDS, acq)),
     h('div', { class: 'form-actions' },
       h('a', { class: 'btn', href: back }, 'Annuler'),

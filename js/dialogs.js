@@ -42,7 +42,7 @@ function input(f, value) {
       return wrap;
     }
     default: {
-      const el = h('input', { class: 'input', id, name: f.key, type: f.type || 'text', placeholder: f.placeholder || '', value: value ?? '', autocomplete: 'off' });
+      const el = h('input', { class: 'input', id, name: f.key, type: f.type || 'text', placeholder: f.placeholder || '', value: value ?? '', autocomplete: f.autocomplete || 'off' });
       if (f.datalist && f.datalist.length) {
         const listId = 'dl-' + (++dlCounter);
         el.setAttribute('list', listId);
