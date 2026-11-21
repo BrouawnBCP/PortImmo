@@ -1,14 +1,15 @@
 import { h, fill, icon, blobUrl, fmtPrice, fmtNum, fmtDate, toast, actionSheet, confirmDialog, promptDialog, pickImages } from '../ui.js';
-import { listAcquereurs, getBien, saveBien, deleteBien, listPhotos, putPhoto, deletePhoto, deletePhotosOfPiece, reorderPhotos, saveEvent, uid } from '../db.js';
+import { listAcquereurs, saveAcquereur, getBien, saveBien, deleteBien, listPhotos, putPhoto, deletePhoto, deletePhotosOfPiece, reorderPhotos, saveEvent, uid } from '../db.js';
 import { SECTIONS, PIECES_SUGGEREES } from '../config.js';
 import { processImage, rotateImage, cropImage } from '../images.js';
 import { setTopbar, isCurrent } from '../app.js';
 import { statutInfo } from './list.js';
 import { openLightbox } from './lightbox.js';
 import { openCropper } from './cropper.js';
-import { renderJournal } from './journal.js';
+import { renderJournal, acqName } from './journal.js';
 import { renderDocs } from './docs.js';
-import { renderAcquereursPourBien, vendeurCard } from './contacts.js';
+import { renderAcquereursPourBien, vendeurCard, quickCreateVendeur } from './contacts.js';
+import { isVendeur, rolesOf } from '../matching.js';
 import { formDialog } from '../dialogs.js';
 import { formatValue, isEmpty } from '../format.js';
 import { openShareMenu } from './share.js';
@@ -106,8 +107,50 @@ export async function renderDetail(view, id, token) {
       }, icon('pin'), lieu) : null,
       facts.length ? h('div', { class: 'facts facts-lg' }, facts.map((f) => h('span', { class: 'fact' }, f))) : null,
       h('div', { class: 'head-actions' },
-        h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openShareMenu(bien) }, icon('share'), 'Partager l’annonce'),
-        h('a', { class: 'btn', href: `#/simulateur/${encodeURIComponent(bien.id)}` }, icon('calculator'), 'Simuler')));
+        h('button', { class: 'btn btn-primary head-share', type: 'button', onclick: () => openShareMenu(bien) }, icon('share'), 'Partager l’annonce'),
+        h('a', { class: 'btn', href: `#/simulateur/${encodeURIComponent(bien.id)}` }, icon('calculator'), 'Simuler'),
+        vendeurButton()));
+  }
+
+  // ---------- Vendeur lié ----------
+  function linkedVendeur() {
+    return bien.vendeurId ? contacts.find((c) => c.id === bien.vendeurId) || null : null;
+  }
+
+  function vendeurButton() {
+    const v = linkedVendeur();
+    if (v) {
+      return h('a', { class: 'btn btn-vendeur', href: `#/contact/${encodeURIComponent(v.id)}` }, icon('user'), 'Vendeur');
+    }
+    return h('button', { class: 'btn btn-link-vendeur', type: 'button', onclick: chooseVendeur }, icon('plus'), 'Lier à un vendeur');
+  }
+
+  /** Choix du vendeur : fiches vendeur existantes, autre contact, ou nouvelle fiche. */
+  function chooseVendeur() {
+    const vendeurs = contacts.filter((c) => isVendeur(c) && c.statut !== 'inactif').sort((a, b) => acqName(a).localeCompare(acqName(b), 'fr'));
+    const autres = contacts.filter((c) => !isVendeur(c) && c.statut !== 'inactif');
+    const link = async (c) => {
+      if (!isVendeur(c)) await saveAcquereur({ ...c, roles: [...rolesOf(c), 'vendeur'] });
+      bien.vendeurId = c.id;
+      await persist();
+      toast(`Bien lié à ${acqName(c)}`);
+      refreshAll();
+    };
+    actionSheet('Lier à un vendeur', [
+      ...vendeurs.map((c) => ({ icon: 'user', label: acqName(c) + (c.telephone ? ` · ${c.telephone}` : ''), onClick: () => link(c) })),
+      { icon: 'plus', label: 'Nouveau vendeur…', onClick: async () => { const c = await quickCreateVendeur(); if (c) { contacts.push(c); link(c); } } },
+      autres.length ? { icon: 'users', label: 'Choisir un autre contact…', onClick: () => actionSheet('Autre contact (deviendra aussi vendeur)', autres.map((c) => ({ icon: 'user', label: acqName(c), onClick: () => link(c) }))) } : null,
+    ].filter(Boolean));
+  }
+
+  async function unlinkVendeur() {
+    const v = linkedVendeur();
+    if (!v) return;
+    if (!(await confirmDialog(`Retirer le lien avec ${acqName(v)} ? La fiche du vendeur est conservée.`, { okLabel: 'Retirer' }))) return;
+    delete bien.vendeurId;
+    await persist();
+    toast('Vendeur retiré');
+    refreshAll();
   }
 
   // ---------- Photo principale ----------
@@ -471,9 +514,13 @@ export async function renderDetail(view, id, token) {
       { icon: 'edit', label: 'Modifier les informations', onClick: () => { location.hash = `#/bien/${encodeURIComponent(id)}/modifier`; } },
       { icon: 'share', label: 'Partager l’annonce', onClick: () => openShareMenu(bien) },
       { icon: 'calculator', label: 'Simulation (honoraires, notaire, crédit)', onClick: () => { location.hash = `#/simulateur/${encodeURIComponent(bien.id)}`; } },
+      linkedVendeur()
+        ? { icon: 'user', label: 'Changer de vendeur', onClick: chooseVendeur }
+        : { icon: 'user', label: 'Lier à un vendeur', onClick: chooseVendeur },
+      linkedVendeur() ? { icon: 'close', label: 'Retirer le vendeur lié', onClick: unlinkVendeur } : null,
       { icon: 'copy', label: 'Dupliquer (sans les photos)', onClick: duplicate },
       { icon: 'trash', label: 'Supprimer le bien', danger: true, onClick: remove },
-    ]);
+    ].filter(Boolean));
   }
 
   async function duplicate() {

@@ -535,8 +535,13 @@ select.input { appearance: none; padding-right: 32px;
 .lightbox.busy .lb-bar { opacity: .5; pointer-events: none; }
 
 /* ---------- Divers ---------- */
-.head-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-@media (max-width: 520px) { .head-actions .btn { flex: 1; } }
+.head-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.head-actions .head-share { grid-column: 1 / -1; }
+.head-actions .btn:not(.head-share) { padding: 0 8px; gap: 6px; font-size: .9rem; white-space: nowrap; }
+@media (min-width: 640px) { .head-actions { grid-template-columns: 2fr 1fr 1fr; } .head-actions .head-share { grid-column: auto; } }
+.btn-vendeur { background: var(--accent-soft); border-color: var(--accent); color: #8a6326; }
+@media (prefers-color-scheme: dark) { .btn-vendeur { color: var(--accent); } }
+.btn-link-vendeur { border-style: dashed; color: var(--primary); }
 .list-meta-right { display: flex; align-items: center; gap: 8px; }
 .with-icon { display: flex; align-items: center; gap: 8px; }
 .with-icon .icon { color: var(--primary); }
